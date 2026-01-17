@@ -4,7 +4,7 @@
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Target](https://img.shields.io/badge/Target-Paper%20/%20Folia%20/%20TypeWriter-blue)
 
-**Shops Extension** is a commerce system for **TypeWriter**, engineered for **BTC Studio** infrastructure. It provides an UltimateShop-like shopping experience with dynamic pricing and stock handling.
+**Shops Extension** is a commerce system for **TypeWriter**, engineered for **BTC Studio** infrastructure. It provides an [UltimateShop](https://github.com/ManyouTeam/UltimateShop)-like shopping experience with dynamic pricing and stock handling.
 
 ---
 
