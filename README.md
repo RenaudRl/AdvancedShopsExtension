@@ -2,9 +2,9 @@
 
 ![Java Version](https://img.shields.io/badge/Java-21-orange)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-![Target](https://img.shields.io/badge/Target-Paper%20/%20Folia%20/%20TypeWriter-blue)
+![Target](https://img.shields.io/badge/Target-Paper%20/%20Folia%20/%20BTC--CORE-blue)
 
-**Shops Extension** is a commerce system for **TypeWriter**, engineered for **BTC Studio** infrastructure. It provides an [UltimateShop](https://github.com/ManyouTeam/UltimateShop)-like shopping experience with dynamic pricing and stock handling.
+**Shops Extension** is a commerce system for **TypeWriter**, engineered for **BTC Studio** infrastructure. It provides an UltimateShop-like shopping experience with dynamic pricing and stock handling.
 
 ---
 
@@ -44,7 +44,7 @@ cd AdvancedShopsExtension
 
 ## 🤝 Credits & Inspiration
 - **[TypeWriter](https://github.com/gabber235/Typewriter)** - The engine this extension is built for.
-- **[BTC Studio](https://github.com/RenaudRl)** - Maintenance and specialized optimizations.
+- **[BTC Studio](https://borntocraft.fr)** - Maintenance and specialized optimizations.
 
 ---
 
