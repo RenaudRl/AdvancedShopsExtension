@@ -1,7 +1,7 @@
-plugins {
+﻿plugins {
     kotlin("jvm") version "2.2.10"
     kotlin("plugin.serialization") version "2.2.10"
-    id("com.typewritermc.module-plugin")
+    id("com.typewritermc.module-plugin") version "2.1.0"
 }
 
 group = "com.btc.shops"
@@ -13,6 +13,9 @@ repositories {
     maven("https://repo.codemc.io/repository/creatorfromhell/")
     maven("https://jitpack.io")
     maven("https://repo.extendedclip.com/content/repositories/placeholderapi/")
+    flatDir {
+        dir("libs")
+    }
 }
 
 dependencies {
@@ -35,7 +38,7 @@ typewriter {
             included here is intentionally lightweight and meant for demonstration and testing purposes within the
             BornToCraft environment.
         """.trimIndent()
-        engineVersion = file("../../version.txt").readText().trim()
+        engineVersion = "0.9.0-beta-171"
         channel = com.typewritermc.moduleplugin.ReleaseChannel.BETA
         dependencies {
             paper()
@@ -46,5 +49,6 @@ typewriter {
 kotlin {
     jvmToolchain(21)
 }
+
 
 
