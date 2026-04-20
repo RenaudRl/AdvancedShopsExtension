@@ -109,8 +109,8 @@ class GuiService(
             val size = definition.rows * 9
             val prevSlot = size - 9
             val nextSlot = size - 1
-            val infoSlotUsed = definition.infoButton.slot in 0 until size
-            val pageSlots = size - 2 - if (infoSlotUsed) 1 else 0
+            val infoSlotUsed = definition.infoButton.slots.any { it in 0 until size }
+            val pageSlots = size - 2 - definition.infoButton.slots.count { it in 0 until size }
             val startIndex = page * pageSlots
             val title = definition.title.toComponent(player)
             val inventory: Inventory = Bukkit.createInventory(null, size, title)
@@ -125,7 +125,7 @@ class GuiService(
             val pageItems = definition.items.drop(startIndex).take(pageSlots)
             var itemIndex = 0
             for (slot in 0 until size) {
-                if (slot == prevSlot || slot == nextSlot || (infoSlotUsed && slot == definition.infoButton.slot)) continue
+                if (slot == prevSlot || slot == nextSlot || (infoSlotUsed && slot in definition.infoButton.slots)) continue
                 val cfg = pageItems.getOrNull(itemIndex++) ?: break
                 if (!cfg.criteria.matches(player)) {
                     definition.lockedItem.get(player)?.build(player)?.let { inventory.setItem(slot, it) }
@@ -160,10 +160,12 @@ class GuiService(
             }
 
             if (infoSlotUsed) {
-                inventory.setItem(
-                    definition.infoButton.slot,
-                    buildButton(null, player, definition, 1, definition.infoButton)
-                )
+                definition.infoButton.slots.filter { it in 0 until size }.forEach {
+                    inventory.setItem(
+                        it,
+                        buildButton(null, player, definition, 1, definition.infoButton)
+                    )
+                }
             }
 
             player.openInventory(inventory)
@@ -190,9 +192,9 @@ class GuiService(
                         inventory.setItem(slot, buildItem(cfg, player, view.definition))
                     }
                     val def = view.definition
-                    if (def.infoButton.slot in 0 until inventory.size) {
+                    def.infoButton.slots.filter { it in 0 until inventory.size }.forEach {
                         inventory.setItem(
-                            def.infoButton.slot,
+                            it,
                             buildButton(null, player, def, 1, def.infoButton)
                         )
                     }
@@ -200,33 +202,33 @@ class GuiService(
                 is AmountView -> {
                     val def = view.definition
                     val stackAmount = view.cfg.item.get(player)?.build(player)?.maxStackSize ?: 64
-                    if (def.buyStackButton.slot in 0 until inventory.size) {
+                    def.buyStackButton.slots.filter { it in 0 until inventory.size }.forEach {
                         inventory.setItem(
-                            def.buyStackButton.slot,
+                            it,
                             buildButton(view.cfg, player, def, stackAmount, def.buyStackButton)
                         )
                     }
-                    if (def.sellStackButton.slot in 0 until inventory.size) {
+                    def.sellStackButton.slots.filter { it in 0 until inventory.size }.forEach {
                         inventory.setItem(
-                            def.sellStackButton.slot,
+                            it,
                             buildButton(view.cfg, player, def, stackAmount, def.sellStackButton)
                         )
                     }
-                    if (def.buyAmountButton.slot in 0 until inventory.size) {
+                    def.buyAmountButton.slots.filter { it in 0 until inventory.size }.forEach {
                         inventory.setItem(
-                            def.buyAmountButton.slot,
+                            it,
                             buildButton(view.cfg, player, def, 1, def.buyAmountButton)
                         )
                     }
-                    if (def.sellAmountButton.slot in 0 until inventory.size) {
+                    def.sellAmountButton.slots.filter { it in 0 until inventory.size }.forEach {
                         inventory.setItem(
-                            def.sellAmountButton.slot,
+                            it,
                             buildButton(view.cfg, player, def, 1, def.sellAmountButton)
                         )
                     }
-                    if (def.backButton.slot in 0 until inventory.size) {
+                    def.backButton.slots.filter { it in 0 until inventory.size }.forEach {
                         inventory.setItem(
-                            def.backButton.slot,
+                            it,
                             buildButton(view.cfg, player, def, 1, def.backButton)
                         )
                     }
@@ -383,12 +385,27 @@ class GuiService(
             sendMessage(player, definition.cannotSellMessage, mapOf("amount" to amount, "price" to formatPrice(reward)))
             return
         }
-        val template = cfg.item.get(player)?.build(player)?.apply { this.amount = amount } ?: ItemStack(Material.STONE, amount)
-        if (!player.inventory.containsAtLeast(template, amount)) {
+        val template = cfg.item.get(player)?.build(player) ?: ItemStack(Material.STONE)
+        template.amount = 1 // Set to 1 for comparison
+        
+        // Ensure accurate counts with exact durability match
+        val validItemsCount = player.inventory.contents.filterNotNull().filter { item ->
+            if (!item.isSimilar(template)) return@filter false
+            val meta = item.itemMeta
+            if (meta is org.bukkit.inventory.meta.Damageable) {
+                val templateMeta = template.itemMeta as? org.bukkit.inventory.meta.Damageable
+                val expectedDamage = templateMeta?.takeIf { it.hasDamage() }?.damage ?: 0
+                if (meta.hasDamage() && meta.damage > expectedDamage) return@filter false
+            }
+            true
+        }.sumOf { it.amount }
+
+        if (validItemsCount < amount) {
             sendMessage(player, definition.notEnoughItemsMessage, mapOf("amount" to amount, "price" to formatPrice(reward)))
             return
         }
-        player.inventory.removeItem(template)
+        val removeTemplate = template.clone().apply { this.amount = amount }
+        player.inventory.removeItem(removeTemplate)
         economy.deposit(player.uniqueId, reward)
         val index = definition.items.indexOf(cfg)
         stockService.sell(definition.id, index, amount, cfg.strategy)
@@ -403,7 +420,19 @@ class GuiService(
         economy: Economy
     ) {
         val template = cfg.item.get(player)?.build(player) ?: ItemStack(Material.STONE)
-        val allAmount = player.inventory.contents.filterNotNull().filter { it.isSimilar(template) }.sumOf { it.amount }
+        template.amount = 1
+        
+        val allAmount = player.inventory.contents.filterNotNull().filter { item ->
+            if (!item.isSimilar(template)) return@filter false
+            val meta = item.itemMeta
+            if (meta is org.bukkit.inventory.meta.Damageable) {
+                val templateMeta = template.itemMeta as? org.bukkit.inventory.meta.Damageable
+                val expectedDamage = templateMeta?.takeIf { it.hasDamage() }?.damage ?: 0
+                if (meta.hasDamage() && meta.damage > expectedDamage) return@filter false
+            }
+            true
+        }.sumOf { it.amount }
+
         if (allAmount <= 0) {
             sendMessage(player, definition.notEnoughItemsMessage, mapOf("amount" to 0, "price" to formatPrice(0.0)))
             return
@@ -487,33 +516,33 @@ class GuiService(
         }
         val stackAmount = cfg.item.get(player)?.build(player)?.maxStackSize ?: 64
 
-        if (definition.buyStackButton.slot in 0 until inventory.size) {
+        definition.buyStackButton.slots.filter { it in 0 until inventory.size }.forEach {
             inventory.setItem(
-                definition.buyStackButton.slot,
+                it,
                 buildButton(cfg, player, definition, stackAmount, definition.buyStackButton)
             )
         }
-        if (definition.sellStackButton.slot in 0 until inventory.size) {
+        definition.sellStackButton.slots.filter { it in 0 until inventory.size }.forEach {
             inventory.setItem(
-                definition.sellStackButton.slot,
+                it,
                 buildButton(cfg, player, definition, stackAmount, definition.sellStackButton)
             )
         }
-        if (definition.buyAmountButton.slot in 0 until inventory.size) {
+        definition.buyAmountButton.slots.filter { it in 0 until inventory.size }.forEach {
             inventory.setItem(
-                definition.buyAmountButton.slot,
+                it,
                 buildButton(cfg, player, definition, 1, definition.buyAmountButton)
             )
         }
-        if (definition.sellAmountButton.slot in 0 until inventory.size) {
+        definition.sellAmountButton.slots.filter { it in 0 until inventory.size }.forEach {
             inventory.setItem(
-                definition.sellAmountButton.slot,
+                it,
                 buildButton(cfg, player, definition, 1, definition.sellAmountButton)
             )
         }
-        if (definition.backButton.slot in 0 until inventory.size) {
+        definition.backButton.slots.filter { it in 0 until inventory.size }.forEach {
             inventory.setItem(
-                definition.backButton.slot,
+                it,
                 buildButton(cfg, player, definition, 1, definition.backButton)
             )
         }
@@ -539,8 +568,8 @@ class GuiService(
                 val size = definition.rows * 9
                 val prevSlot = size - 9
                 val nextSlot = size - 1
-                val infoSlot = definition.infoButton.slot
-                val pageSlots = size - 2 - if (infoSlot in 0 until size) 1 else 0
+                val infoSlots = definition.infoButton.slots.filter { it in 0 until size }
+                val pageSlots = size - 2 - infoSlots.size
                 when (event.rawSlot) {
                     nextSlot -> {
                         val startIndex = (page + 1) * pageSlots
@@ -549,7 +578,7 @@ class GuiService(
                     prevSlot -> {
                         if (page > 0) open(player, definition, page - 1)
                     }
-                    infoSlot -> {
+                    in infoSlots -> {
                         definition.infoMessage.forEach {
                             val msg = processText(it, null, definition, 1, player).toComponent(player)
                             player.sendMessage(msg)
@@ -579,23 +608,23 @@ class GuiService(
                     return
                 }
                 when (event.rawSlot) {
-                    definition.buyStackButton.slot -> {
+                    in definition.buyStackButton.slots -> {
                         val stackAmount = view.cfg.item.get(player)?.build(player)?.maxStackSize ?: 64
                         handleBuy(player, view.cfg, definition, economy, stackAmount)
                     }
-                    definition.sellStackButton.slot -> {
+                    in definition.sellStackButton.slots -> {
                         val stackAmount = view.cfg.item.get(player)?.build(player)?.maxStackSize ?: 64
                         handleSell(player, view.cfg, definition, economy, stackAmount)
                     }
-                    definition.buyAmountButton.slot -> {
+                    in definition.buyAmountButton.slots -> {
                         player.closeInventory()
                         openAmountInputDialog(player, definition, view.cfg, view.page, true)
                     }
-                    definition.sellAmountButton.slot -> {
+                    in definition.sellAmountButton.slots -> {
                         player.closeInventory()
                         openAmountInputDialog(player, definition, view.cfg, view.page, false)
                     }
-                    definition.backButton.slot -> open(player, definition, view.page)
+                    in definition.backButton.slots -> open(player, definition, view.page)
                 }
             }
         }

@@ -52,18 +52,8 @@ class ShopDefinitionEntry(
     val removeCommand: String = "",
     @Help("Tax percentage applied on purchases.")
     val taxes: Double = 0.0,
-    @Help("Policy determining when stock resets.")
-    val resetPolicy: ResetPolicy = ResetPolicy.NONE,
-    @Help("Hour of day used for reset policies.")
-    val resetHour: Int = 0,
-    @Help("Minute of hour used for reset policies.")
-    val resetMinute: Int = 0,
-    @Help("Day of week used when reset policy is WEEKLY.")
-    val resetDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
-    @Help("Day of month used when reset policy is MONTHLY.")
-    val resetDayOfMonth: Int = 1,
-    @Help("Interval in seconds when reset policy is INTERVAL.")
-    val resetIntervalSeconds: Long = 0,
+    @Help("Policy determining when stock resets. Supports Cron, Interval, Daily, Weekly, and Monthly.")
+    val reset: ResetPolicy = ResetPolicy.None(),
     @Help("Items available in the shop.")
     val items: List<ShopItemConfig> = emptyList(),
     @Help("Button used to buy a full stack at once.")

@@ -3,13 +3,15 @@ package com.btc.shops.service
 import com.btc.shops.manifest.ShopDefinitionEntry
 import com.typewritermc.core.extension.annotations.Singleton
 import org.bukkit.entity.Player
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 @Singleton
-class PlayerLimitService(
-    private val resetService: ResetService
-) {
+class PlayerLimitService : KoinComponent {
+    private val resetService: ResetService by inject()
+    
     private val usage = ConcurrentHashMap<String, MutableMap<UUID, Int>>()
 
     private fun key(definition: ShopDefinitionEntry, index: Int) = "${definition.id}:$index"

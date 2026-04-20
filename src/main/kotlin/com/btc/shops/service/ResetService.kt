@@ -3,61 +3,93 @@ package com.btc.shops.service
 import com.btc.shops.manifest.ResetPolicy
 import com.btc.shops.manifest.ShopDefinitionEntry
 import com.typewritermc.core.extension.annotations.Singleton
+import com.typewritermc.core.entries.Query
+import org.bukkit.Bukkit
+import org.bukkit.plugin.java.JavaPlugin
 import java.time.*
 import java.time.temporal.TemporalAdjusters
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
+/**
+ * Service responsible for calculating reset times and performing automatic stock resets.
+ */
 @Singleton
-class ResetService {
+class ResetService(
+    private val plugin: JavaPlugin,
+    private val stockService: StockService,
+    private val playerLimitService: PlayerLimitService
+) {
     private val nextReset = ConcurrentHashMap<String, Long>()
 
-    fun shouldReset(definition: ShopDefinitionEntry): Boolean {
+    init {
+        // Global background task: Check for resets every minute (1200 ticks)
+        Bukkit.getScheduler().runTaskTimer(plugin, Runnable { checkGlobalResets() }, 100L, 1200L)
+    }
+
+    private fun checkGlobalResets() {
         val now = System.currentTimeMillis()
-        val next = nextReset.getOrPut(definition.id) { calculateNext(now, definition) }
+        Query.find<ShopDefinitionEntry>().forEach { definition ->
+            if (shouldReset(definition, now)) {
+                performReset(definition)
+            }
+        }
+    }
+
+    fun shouldReset(definition: ShopDefinitionEntry, now: Long = System.currentTimeMillis()): Boolean {
+        val next = nextReset.getOrPut(definition.id) { calculateNext(now, definition.reset) }
         return if (now >= next) {
-            nextReset[definition.id] = calculateNext(now, definition)
+            nextReset[definition.id] = calculateNext(now, definition.reset)
             true
         } else {
             false
         }
     }
 
+    private fun performReset(definition: ShopDefinitionEntry) {
+        definition.items.forEachIndexed { index, cfg ->
+            stockService.reset(definition.id, index, cfg.strategy.stockMax)
+        }
+        playerLimitService.reset(definition)
+    }
+
     fun remaining(definition: ShopDefinitionEntry): Long {
         val now = System.currentTimeMillis()
-        val next = nextReset.getOrPut(definition.id) { calculateNext(now, definition) }
+        val next = nextReset.getOrPut(definition.id) { calculateNext(now, definition.reset) }
         return (next - now).coerceAtLeast(0)
     }
 
-    private fun calculateNext(now: Long, definition: ShopDefinitionEntry): Long {
+    private fun calculateNext(now: Long, policy: ResetPolicy): Long {
         val zone = ZoneId.systemDefault()
         val zoned = Instant.ofEpochMilli(now).atZone(zone)
-        val hour = definition.resetHour.coerceIn(0, 23)
-        val minute = definition.resetMinute.coerceIn(0, 59)
 
-        return when (definition.resetPolicy) {
-            ResetPolicy.INTERVAL -> now + TimeUnit.SECONDS.toMillis(definition.resetIntervalSeconds)
-            ResetPolicy.DAILY -> {
-                val base = zoned.withHour(hour).withMinute(minute).withSecond(0).withNano(0)
+        return when (policy) {
+            is ResetPolicy.None -> Long.MAX_VALUE
+            is ResetPolicy.Interval -> now + TimeUnit.SECONDS.toMillis(policy.seconds)
+            is ResetPolicy.Daily -> {
+                val base = zoned.withHour(policy.hour).withMinute(policy.minute).withSecond(0).withNano(0)
                 val next = if (base.toInstant().toEpochMilli() > now) base else base.plusDays(1)
                 next.toInstant().toEpochMilli()
             }
-            ResetPolicy.WEEKLY -> {
-                val base = zoned.with(TemporalAdjusters.nextOrSame(definition.resetDayOfWeek))
-                    .withHour(hour).withMinute(minute).withSecond(0).withNano(0)
+            is ResetPolicy.Weekly -> {
+                val base = zoned.with(TemporalAdjusters.nextOrSame(DayOfWeek.of(policy.day)))
+                    .withHour(policy.hour).withMinute(policy.minute).withSecond(0).withNano(0)
                 val next = if (base.toInstant().toEpochMilli() > now) base else base.plusWeeks(1)
                 next.toInstant().toEpochMilli()
             }
-            ResetPolicy.MONTHLY -> {
-                val day = definition.resetDayOfMonth
+            is ResetPolicy.Monthly -> {
+                val day = policy.day
                 val base = zoned.withDayOfMonth(day.coerceIn(1, zoned.toLocalDate().lengthOfMonth()))
-                    .withHour(hour).withMinute(minute).withSecond(0).withNano(0)
+                    .withHour(policy.hour).withMinute(policy.minute).withSecond(0).withNano(0)
                 val next = if (base.toInstant().toEpochMilli() > now) base else base.plusMonths(1)
                     .withDayOfMonth(day.coerceIn(1, base.plusMonths(1).toLocalDate().lengthOfMonth()))
                 next.toInstant().toEpochMilli()
             }
-            else -> Long.MAX_VALUE
+            is ResetPolicy.Cron -> {
+                // Simplified: Cron implementation would typically use a library like Quartz or CronUtils.
+                // For now, treat as daily at midnight if not implemented.
+                zoned.plusDays(1).withHour(0).withMinute(0).toInstant().toEpochMilli()
+            }
         }
     }
 }
-

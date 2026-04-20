@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class MenuButton(
     @Help("Inventory slot used for this button.")
-    val slot: Int = -1,
+    val slots: List<Int> = listOf(-1),
     @Help("Item displayed for the button.")
     val item: Var<Item> = ConstVar(Item.Empty),
     @Help("Display name of the button. Supports color codes and placeholders.")
