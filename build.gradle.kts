@@ -1,54 +1,38 @@
-﻿plugins {
-    kotlin("jvm") version "2.2.10"
-    kotlin("plugin.serialization") version "2.2.10"
+plugins {
+    kotlin("jvm") version "2.3.20"
     id("com.typewritermc.module-plugin") version "2.1.0"
 }
 
-group = "com.btc.shops"
+group = "btcrenaud"
 version = "0.1.0"
 
 repositories {
+    mavenLocal()
+    maven("https://jitpack.io/")
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
-    maven("https://repo.codemc.io/repository/creatorfromhell/")
-    maven("https://jitpack.io")
-    maven("https://repo.extendedclip.com/content/repositories/placeholderapi/")
-    flatDir {
-        dir("libs")
-    }
-}
-
-dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT")
-    compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
-    compileOnly("me.clip:placeholderapi:2.11.6")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-    implementation("io.insert-koin:koin-core:3.5.6")
-    testImplementation(kotlin("test"))
+    maven("https://repo.codemc.io/repository/maven-public/")
+    maven("https://maven.typewritermc.com/beta/")
+    maven("https://maven.typewritermc.com/external/")
 }
 
 typewriter {
-    namespace = "borntocraft"
+    namespace = "renaud"
+
     extension {
-        name = "Shops"
-        shortDescription = "UltimateShop-like extension"
-        description = """
-            Shops is a TypeWriter extension that provides an UltimateShop-like shopping system. It demonstrates how
-            dynamic pricing, stock handling and simple GUI services could be implemented using Kotlin. The extension
-            included here is intentionally lightweight and meant for demonstration and testing purposes within the
-            BornToCraft environment.
-        """.trimIndent()
-        engineVersion = "0.9.0-beta-171"
+        name = "AdvancedMenus"
+        shortDescription = "Advanced menu features including random commands and packets."
+        description = """Typewriter extension module providing additional entries for the Typewriter plugin ecosystem. Supports Paper and Folia server platforms with full feature parity. This module extends the core functionality with specialized entries. Compatible with the official Typewriter engine and designed for standalone use."""
+        engineVersion = "0.9.0-beta-174"
         channel = com.typewritermc.moduleplugin.ReleaseChannel.BETA
-        dependencies {
-            paper()
-        }
+        
+        paper()
     }
 }
 
+    
+
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
+    
 }
-
-
-
