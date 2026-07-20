@@ -1,5 +1,6 @@
 package com.btc.shops.service
 
+import com.btc.shops.manifest.PriceMode
 import com.btc.shops.manifest.ShopDefinitionEntry
 import com.typewritermc.core.entries.Query
 import com.typewritermc.core.extension.annotations.Singleton
@@ -10,7 +11,9 @@ import org.bukkit.entity.Player
 class PlaceholderService(
     private val priceService: PriceService,
     private val stockService: StockService,
-    private val resetService: ResetService
+    private val resetService: ResetService,
+    private val promotionService: PromotionService,
+    private val priceTrendService: PriceTrendService
 ) : PlaceholderHandler {
 
     override fun onPlaceholderRequest(player: Player?, params: String): String? {
@@ -53,13 +56,23 @@ class PlaceholderService(
     ): String? {
         val index = itemIndexRaw.toIntOrNull() ?: return null
         val config = shop.items.getOrNull(index) ?: return null
-        val stock = stockService.getStock(shop.id, index, config.strategy.stockMax)
+        val stock = stockService.getStock(shop.id, index, config.dynamicPricing.stockMax)
 
         return when (key) {
-            "buy_price" -> priceService.calculateBuyPrice(stock, config.strategy).toString()
-            "sell_price" -> priceService.calculateSellPrice(stock, config.strategy).toString()
+            "buy_price" -> when (config.priceMode) {
+                PriceMode.FIXED -> config.fixedBuyPrice.toString()
+                PriceMode.DYNAMIC -> priceService.calculateBuyPrice(stock, config.dynamicPricing).toString()
+            }
+            "sell_price" -> when (config.priceMode) {
+                PriceMode.FIXED -> config.fixedSellPrice.toString()
+                PriceMode.DYNAMIC -> priceService.calculateSellPrice(stock, config.dynamicPricing).toString()
+            }
             "stock" -> stock.toString()
-            "stock_max" -> config.strategy.stockMax.toString()
+            "stock_max" -> config.dynamicPricing.stockMax.toString()
+            "has_promotion" -> promotionService.hasPromotion(shop.id, index).toString()
+            "trend" -> priceTrendService.getTrend(shop.id, index)
+            "trend_icon" -> priceTrendService.getTrendIcon(shop.id, index)
+            "price_delta" -> priceTrendService.getPriceDelta(shop.id, index).toString()
             else -> null
         }
     }
@@ -84,4 +97,3 @@ internal fun formatDuration(millis: Long, pattern: String? = null): String {
         .replace("{m}", minutes.pad())
         .replace("{s}", seconds.pad())
 }
-

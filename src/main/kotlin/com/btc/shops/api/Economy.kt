@@ -16,4 +16,3 @@ interface Economy {
     /** Deposits [amount] to the player. */
     fun deposit(playerId: UUID, amount: Double)
 }
-

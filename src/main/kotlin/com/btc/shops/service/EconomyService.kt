@@ -13,7 +13,9 @@ import org.bukkit.Bukkit
  * Resolves the appropriate [Economy] implementation for a shop definition.
  */
 @Singleton
-class EconomyService {
+class EconomyService(
+    private val persistence: ShopPersistenceService
+) {
     fun resolve(definition: ShopDefinitionEntry): Economy? = when (definition.currency) {
         CurrencyType.VAULT -> Bukkit.getServicesManager()
             .getRegistration(net.milkbowl.vault.economy.Economy::class.java)
@@ -24,7 +26,6 @@ class EconomyService {
         } else {
             null
         }
-        CurrencyType.POINTS -> PointsEconomy()
+        CurrencyType.POINTS -> PointsEconomy(persistence)
     }
 }
-

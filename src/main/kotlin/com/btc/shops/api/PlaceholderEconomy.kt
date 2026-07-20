@@ -39,4 +39,3 @@ class PlaceholderEconomy(
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command)
     }
 }
-

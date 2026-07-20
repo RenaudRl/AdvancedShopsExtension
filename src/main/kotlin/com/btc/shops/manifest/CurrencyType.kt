@@ -15,5 +15,3 @@ enum class CurrencyType {
     @Help("Use a simple in-memory points economy.")
     POINTS
 }
-
-

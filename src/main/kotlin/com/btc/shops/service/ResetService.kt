@@ -10,21 +10,23 @@ import java.time.*
 import java.time.temporal.TemporalAdjusters
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.function.Consumer
 
 /**
  * Service responsible for calculating reset times and performing automatic stock resets.
+ * Folia-safe: uses globalRegionScheduler for periodic checks.
  */
 @Singleton
 class ResetService(
     private val plugin: JavaPlugin,
     private val stockService: StockService,
-    private val playerLimitService: PlayerLimitService
+    private val playerLimitService: PlayerLimitService,
+    private val globalLimitService: GlobalLimitService
 ) {
     private val nextReset = ConcurrentHashMap<String, Long>()
 
     init {
-        // Global background task: Check for resets every minute (1200 ticks)
-        Bukkit.getScheduler().runTaskTimer(plugin, Runnable { checkGlobalResets() }, 100L, 1200L)
+        Bukkit.getGlobalRegionScheduler().runAtFixedRate(plugin, Consumer { checkGlobalResets() }, 100L, 1200L)
     }
 
     private fun checkGlobalResets() {
@@ -47,10 +49,27 @@ class ResetService(
     }
 
     private fun performReset(definition: ShopDefinitionEntry) {
+        // Reset stocks (shared)
         definition.items.forEachIndexed { index, cfg ->
-            stockService.reset(definition.id, index, cfg.strategy.stockMax)
+            stockService.reset(definition.id, index, cfg.dynamicPricing.stockMax)
         }
+
+        // Reset per-player stocks if perPlayer mode
+        if (definition.perPlayer) {
+            // Per-player stocks are reset by clearing the persistence keys
+            // The getStock() will return max for any key not found
+            playerLimitService.reset(definition)
+        }
+
+        // Reset player limits
         playerLimitService.reset(definition)
+
+        // Reset global limits (per-item)
+        globalLimitService.reset(definition)
+
+        // Reset global limits (per-type: buy/sell)
+        globalLimitService.resetGlobal(definition, "buy")
+        globalLimitService.resetGlobal(definition, "sell")
     }
 
     fun remaining(definition: ShopDefinitionEntry): Long {
@@ -86,9 +105,7 @@ class ResetService(
                 next.toInstant().toEpochMilli()
             }
             is ResetPolicy.Cron -> {
-                // Simplified: Cron implementation would typically use a library like Quartz or CronUtils.
-                // For now, treat as daily at midnight if not implemented.
-                zoned.plusDays(1).withHour(0).withMinute(0).toInstant().toEpochMilli()
+                com.btc.shops.util.CronUtil.next(policy.expression, now)
             }
         }
     }

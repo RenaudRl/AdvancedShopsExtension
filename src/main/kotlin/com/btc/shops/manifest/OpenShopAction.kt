@@ -1,6 +1,6 @@
 package com.btc.shops.manifest
 
-import com.btc.shops.service.GuiService
+import com.btc.shops.service.ShopGuiService
 import com.typewritermc.core.books.pages.Colors
 import com.typewritermc.core.entries.Ref
 import com.typewritermc.core.entries.emptyRef
@@ -29,11 +29,10 @@ class OpenShopAction(
     @Help("Shop definition to open for the player.")
     val shop: Ref<ShopDefinitionEntry> = emptyRef()
 ) : ActionEntry, KoinComponent {
-    private val guiService: GuiService by inject()
+    private val shopGuiService: ShopGuiService by inject()
 
     override fun ActionTrigger.execute() {
         val definition = shop.get() ?: return
-        guiService.open(player, definition, delayTicks = 3L)
+        shopGuiService.open(player, definition, delayTicks = 3L)
     }
 }
-

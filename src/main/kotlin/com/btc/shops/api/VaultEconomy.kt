@@ -20,4 +20,3 @@ class VaultEconomy(private val vault: Vault) : Economy {
         vault.depositPlayer(Bukkit.getOfflinePlayer(playerId), amount)
     }
 }
-
