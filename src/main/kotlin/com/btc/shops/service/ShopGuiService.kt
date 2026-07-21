@@ -40,8 +40,22 @@ class ShopGuiService(
     private val openSessions = ConcurrentHashMap<UUID, ShopSession>()
 
     private companion object {
-        /** Marker tag identifying a slot that a shop item is placed into. */
-        const val SHOP_ITEM_BUTTON_TYPE = "shop_button:SHOP_ITEM"
+        /** Marker button type identifying a slot that a shop item is placed into. */
+        const val SHOP_ITEM_BUTTON_TYPE = "SHOP_ITEM"
+
+        /**
+         * True when this layout item is a SHOP_ITEM marker. In GuiItemData the type and the
+         * prefix are SEPARATE fields (buttonType="SHOP_ITEM", buttonPrefix="shop_button:") —
+         * comparing buttonType against the concatenated "shop_button:SHOP_ITEM" never matched,
+         * so markers were left in the layout as inert STRUCTURE_VOIDs and no shop item rendered.
+         * The prefix is optional: a shop layout's SHOP_ITEM marker is unambiguous.
+         */
+        fun isShopItemMarker(item: btcrenaud.gui.GuiItemData): Boolean {
+            val type = item.buttonType?.takeIf { it.isNotEmpty() } ?: return false
+            val prefix = item.buttonPrefix
+            return type == SHOP_ITEM_BUTTON_TYPE &&
+                (prefix == null || prefix.isEmpty() || prefix == "shop_button:")
+        }
     }
 
     private data class ShopSession(
@@ -155,7 +169,7 @@ class ShopGuiService(
             when (layoutData) {
                 is SimpleLayoutData -> {
                     val filteredItems = layoutData.items.filter { item ->
-                        if (item.buttonType == SHOP_ITEM_BUTTON_TYPE) {
+                        if (isShopItemMarker(item)) {
                             GuiSlotBuilder.expandPositions(item).forEach { (px, py) ->
                                 itemPositions.add(SlotPos(px, py))
                             }
@@ -422,7 +436,7 @@ class ShopGuiService(
             when (layoutData) {
                 is SimpleLayoutData -> {
                     layoutData.items.forEach { item ->
-                        if (item.buttonType == SHOP_ITEM_BUTTON_TYPE) {
+                        if (isShopItemMarker(item)) {
                             count += GuiSlotBuilder.expandPositions(item).size
                         }
                     }
