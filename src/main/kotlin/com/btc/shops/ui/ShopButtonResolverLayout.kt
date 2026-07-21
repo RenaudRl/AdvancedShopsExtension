@@ -29,7 +29,11 @@ class ShopButtonResolverLayout(
 ) : MenuLayout {
 
     companion object {
-        const val COMMAND = "typewritershop"
+        /**
+         * Prefix every shop button command carries. [MenuSessionService] routes these straight to
+         * [com.btc.shops.service.ShopButtonActionHandler] instead of dispatching them on the console.
+         */
+        const val COMMAND = com.btc.shops.service.ShopButtonActionHandler.PREFIX
     }
 
     private val delegate = GenericButtonResolverLayout(
@@ -62,7 +66,6 @@ class ShopButtonResolverLayout(
 
         val cmd = COMMAND
         val defId = definition.id
-        val playerName = p.name
         val ic = definition.interactionConfig
 
         return when (buttonType) {
@@ -70,13 +73,13 @@ class ShopButtonResolverLayout(
 
             // ── Navigation (uses navigationClick) ──
             ShopButtonType.NEXT_PAGE -> slot.copy(interactions = mapOf(
-                ic.navigationClick to GuiSlotInteraction(commands = listOf("$cmd next_page $defId 0 $playerName"))
+                ic.navigationClick to GuiSlotInteraction(commands = listOf("${cmd}next_page $defId 0"))
             ))
             ShopButtonType.PREV_PAGE -> slot.copy(interactions = mapOf(
-                ic.navigationClick to GuiSlotInteraction(commands = listOf("$cmd prev_page $defId 0 $playerName"))
+                ic.navigationClick to GuiSlotInteraction(commands = listOf("${cmd}prev_page $defId 0"))
             ))
             ShopButtonType.INFO -> slot.copy(interactions = mapOf(
-                ic.navigationClick to GuiSlotInteraction(commands = listOf("$cmd info $defId $itemIndex $playerName"))
+                ic.navigationClick to GuiSlotInteraction(commands = listOf("${cmd}info $defId $itemIndex"))
             ))
             ShopButtonType.CLOSE -> slot.copy(interactions = mapOf(
                 ic.navigationClick to GuiSlotInteraction(commands = listOf("gui:close"))
@@ -89,40 +92,40 @@ class ShopButtonResolverLayout(
             ShopButtonType.BUY_1 -> {
                 val amount = param?.toIntOrNull() ?: 1
                 slot.copy(interactions = mapOf(
-                    ic.buy1Click to GuiSlotInteraction(commands = listOf("$cmd buy $defId $itemIndex $playerName $amount"))
+                    ic.buy1Click to GuiSlotInteraction(commands = listOf("${cmd}buy $defId $itemIndex $amount"))
                 ))
             }
             ShopButtonType.BUY_STACK -> slot.copy(interactions = mapOf(
-                ic.buyStackClick to GuiSlotInteraction(commands = listOf("$cmd buystack $defId $itemIndex $playerName"))
+                ic.buyStackClick to GuiSlotInteraction(commands = listOf("${cmd}buystack $defId $itemIndex"))
             ))
             ShopButtonType.BUY_MAX -> slot.copy(interactions = mapOf(
-                ic.buyMaxClick to GuiSlotInteraction(commands = listOf("$cmd buymax $defId $itemIndex $playerName"))
+                ic.buyMaxClick to GuiSlotInteraction(commands = listOf("${cmd}buymax $defId $itemIndex"))
             ))
             ShopButtonType.BUY_SUBMENU -> slot.copy(interactions = mapOf(
-                ic.buySubmenuClick to GuiSlotInteraction(commands = listOf("$cmd submenu_buy $defId $itemIndex $playerName"))
+                ic.buySubmenuClick to GuiSlotInteraction(commands = listOf("${cmd}submenu_buy $defId $itemIndex"))
             ))
             ShopButtonType.BUY_CUSTOM -> slot.copy(interactions = mapOf(
-                ic.buyCustomClick to GuiSlotInteraction(commands = listOf("$cmd amount_buy $defId $itemIndex $playerName"))
+                ic.buyCustomClick to GuiSlotInteraction(commands = listOf("${cmd}amount_buy $defId $itemIndex"))
             ))
 
             // ── Sell buttons ──
             ShopButtonType.SELL_1 -> {
                 val amount = param?.toIntOrNull() ?: 1
                 slot.copy(interactions = mapOf(
-                    ic.sell1Click to GuiSlotInteraction(commands = listOf("$cmd sell $defId $itemIndex $playerName $amount"))
+                    ic.sell1Click to GuiSlotInteraction(commands = listOf("${cmd}sell $defId $itemIndex $amount"))
                 ))
             }
             ShopButtonType.SELL_STACK -> slot.copy(interactions = mapOf(
-                ic.sellStackClick to GuiSlotInteraction(commands = listOf("$cmd sellstack $defId $itemIndex $playerName"))
+                ic.sellStackClick to GuiSlotInteraction(commands = listOf("${cmd}sellstack $defId $itemIndex"))
             ))
             ShopButtonType.SELL_ALL -> slot.copy(interactions = mapOf(
-                ic.sellAllClick to GuiSlotInteraction(commands = listOf("$cmd sellall $defId $itemIndex $playerName"))
+                ic.sellAllClick to GuiSlotInteraction(commands = listOf("${cmd}sellall $defId $itemIndex"))
             ))
             ShopButtonType.SELL_SUBMENU -> slot.copy(interactions = mapOf(
-                ic.sellSubmenuClick to GuiSlotInteraction(commands = listOf("$cmd submenu_sell $defId $itemIndex $playerName"))
+                ic.sellSubmenuClick to GuiSlotInteraction(commands = listOf("${cmd}submenu_sell $defId $itemIndex"))
             ))
             ShopButtonType.SELL_CUSTOM -> slot.copy(interactions = mapOf(
-                ic.sellCustomClick to GuiSlotInteraction(commands = listOf("$cmd amount_sell $defId $itemIndex $playerName"))
+                ic.sellCustomClick to GuiSlotInteraction(commands = listOf("${cmd}amount_sell $defId $itemIndex"))
             ))
         }
     }

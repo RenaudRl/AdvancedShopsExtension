@@ -1,6 +1,6 @@
 package com.btc.shops.service
 
-import btcrenaud.gui.Direction
+import btcrenaud.gui.GuiSlotBuilder
 import btcrenaud.gui.GuiType
 import btcrenaud.gui.InventorySize
 import btcrenaud.gui.LayoutData
@@ -38,6 +38,11 @@ class ShopGuiService(
 
     private val miniMessage = MiniMessage.miniMessage()
     private val openSessions = ConcurrentHashMap<UUID, ShopSession>()
+
+    private companion object {
+        /** Marker tag identifying a slot that a shop item is placed into. */
+        const val SHOP_ITEM_BUTTON_TYPE = "shop_button:SHOP_ITEM"
+    }
 
     private data class ShopSession(
         val definition: ShopDefinitionEntry,
@@ -138,7 +143,11 @@ class ShopGuiService(
             else -> InventorySize.SIZE_54
         }
 
-        // 1. Extract SHOP_ITEM positions directly from raw layout data (no parse needed)
+        // 1. Extract SHOP_ITEM positions directly from raw layout data (no parse needed).
+        //    Repetition is expanded by GuiSlotBuilder so SHOP_ITEM markers spread exactly like
+        //    every other repeated item — a local copy of this maths used `gap + 1` as the step,
+        //    ignored `repeatY`, and gated on `count > 1`, which collapsed markers to a single
+        //    slot whenever the editor left `count` unset (serialized as 0).
         data class SlotPos(val x: Int, val y: Int)
         val itemPositions = mutableListOf<SlotPos>()
 
@@ -146,23 +155,9 @@ class ShopGuiService(
             when (layoutData) {
                 is SimpleLayoutData -> {
                     val filteredItems = layoutData.items.filter { item ->
-                        if (item.buttonType == "shop_button:SHOP_ITEM") {
-                            val x = item.x
-                            val y = item.y
-                            itemPositions.add(SlotPos(x, y))
-                            val dir = item.direction
-                            if (dir != null && item.count > 1) {
-                                for (i in 1 until item.count) {
-                                    val gap = item.gap + 1
-                                    itemPositions.add(
-                                        when (dir) {
-                                            Direction.right -> SlotPos(x + i * gap, y)
-                                            Direction.down -> SlotPos(x, y + i * gap)
-                                            Direction.left -> SlotPos(x - i * gap, y)
-                                            Direction.up -> SlotPos(x, y - i * gap)
-                                        }
-                                    )
-                                }
+                        if (item.buttonType == SHOP_ITEM_BUTTON_TYPE) {
+                            GuiSlotBuilder.expandPositions(item).forEach { (px, py) ->
+                                itemPositions.add(SlotPos(px, py))
                             }
                             false // Remove from cleaned layout
                         } else true
@@ -265,10 +260,10 @@ class ShopGuiService(
                 else -> InventorySize.SIZE_54
             }
 
-            // Parse sub-menu layout pool
-            val subPool = definition.subMenuLayoutPool.filterNotNull().associateBy { it.id }
-            val baseLayout: MenuLayout = if (subPool.containsKey(definition.subMenuLayoutId)) {
-                LayoutParser.parse(player, ctx, GuiType.CUSTOM, size.slots, subPool, subPool[definition.subMenuLayoutId]!!)
+            // The sub-menu is just another layout in the shop's single pool, picked by id.
+            val pool = definition.layoutPool.associateBy { it.id }
+            val baseLayout: MenuLayout = if (pool.containsKey(definition.subMenuLayoutId)) {
+                LayoutParser.parse(player, ctx, GuiType.CUSTOM, size.slots, pool, pool[definition.subMenuLayoutId]!!)
             } else {
                 EmptyLayout
             }
@@ -322,19 +317,19 @@ class ShopGuiService(
 
         fun actionToCommands(action: ShopClickAction): List<String>? = when (action) {
             ShopClickAction.NONE -> null
-            ShopClickAction.BUY_1 -> listOf("$cmd buy $defId $itemIndex $playerName 1")
-            ShopClickAction.SELL_1 -> listOf("$cmd sell $defId $itemIndex $playerName 1")
+            ShopClickAction.BUY_1 -> listOf("${cmd}buy $defId $itemIndex 1")
+            ShopClickAction.SELL_1 -> listOf("${cmd}sell $defId $itemIndex 1")
             ShopClickAction.BUY_STACK -> {
                 val stackAmount = cfg.item.get(player).build(player).maxStackSize
-                listOf("$cmd buystack $defId $itemIndex $playerName")
+                listOf("${cmd}buystack $defId $itemIndex")
             }
-            ShopClickAction.SELL_STACK -> listOf("$cmd sellstack $defId $itemIndex $playerName")
-            ShopClickAction.BUY_MAX -> listOf("$cmd buymax $defId $itemIndex $playerName")
-            ShopClickAction.SELL_ALL -> listOf("$cmd sellall $defId $itemIndex $playerName")
-            ShopClickAction.BUY_SUBMENU -> listOf("$cmd submenu_buy $defId $itemIndex $playerName")
-            ShopClickAction.SELL_SUBMENU -> listOf("$cmd submenu_sell $defId $itemIndex $playerName")
-            ShopClickAction.BUY_CUSTOM -> listOf("$cmd amount_buy $defId $itemIndex $playerName")
-            ShopClickAction.SELL_CUSTOM -> listOf("$cmd amount_sell $defId $itemIndex $playerName")
+            ShopClickAction.SELL_STACK -> listOf("${cmd}sellstack $defId $itemIndex")
+            ShopClickAction.BUY_MAX -> listOf("${cmd}buymax $defId $itemIndex")
+            ShopClickAction.SELL_ALL -> listOf("${cmd}sellall $defId $itemIndex")
+            ShopClickAction.BUY_SUBMENU -> listOf("${cmd}submenu_buy $defId $itemIndex")
+            ShopClickAction.SELL_SUBMENU -> listOf("${cmd}submenu_sell $defId $itemIndex")
+            ShopClickAction.BUY_CUSTOM -> listOf("${cmd}amount_buy $defId $itemIndex")
+            ShopClickAction.SELL_CUSTOM -> listOf("${cmd}amount_sell $defId $itemIndex")
         }
 
         fun clickForAction(action: ShopClickAction, config: ShopInteractionConfig): InteractionType? = when (action) {
@@ -416,14 +411,19 @@ class ShopGuiService(
     //  Price Helpers
     // ──────────────────────────────────────────────
 
+    /**
+     * Number of item slots one page holds. MUST use the same expansion as
+     * [openFromLayoutPool], otherwise paging drifts from what is actually rendered
+     * (summing raw `count` reported 0 slots whenever the editor left `count` unset).
+     */
     private fun countItemSlots(definition: ShopDefinitionEntry): Int {
         var count = 0
         definition.layoutPool.forEach { layoutData ->
             when (layoutData) {
                 is SimpleLayoutData -> {
                     layoutData.items.forEach { item ->
-                        if (item.buttonType == "shop_button:SHOP_ITEM") {
-                            count += item.count
+                        if (item.buttonType == SHOP_ITEM_BUTTON_TYPE) {
+                            count += GuiSlotBuilder.expandPositions(item).size
                         }
                     }
                 }

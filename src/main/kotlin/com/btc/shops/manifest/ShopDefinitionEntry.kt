@@ -21,7 +21,7 @@ import kotlinx.serialization.Contextual
  * Uses layout pool + mainLayoutId for full declarative control via GUI Extension,
  * using shop_button: prefixed placeholders for navigation and item slots.
  *
- * Sub-menus (buy/sell options) use [subMenuLayoutPool] and [subMenuLayoutId].
+ * Sub-menus (buy/sell options) are another layout in the same [layoutPool], picked by [subMenuLayoutId].
  */
 @Tags("shop")
 @Entry("shop_definition", "Defines a shop", Colors.GREEN, "mdi:cart")
@@ -60,14 +60,12 @@ class ShopDefinitionEntry(
     @Help("Item pools referenced by this shop. Pool items are merged into the shop display.")
     val itemPools: List<Ref<ShopPoolEntry>> = emptyList(),
 
-    @Help("Layout pool for declarative menu design. When provided, this enables full customisation via GUI Extension.")
+    @Help("Layout pool for declarative menu design. Holds every layout this shop uses — the main menu and the buy/sell sub-menu are both selected out of this pool by id.")
     val layoutPool: List<LayoutData> = emptyList(),
     @Help("ID of the main layout within the layout pool to display.")
     val mainLayoutId: String = "",
 
-    @Help("Layout pool for the buy/sell sub-menu. Uses shop_button: prefixed placeholders.")
-    val subMenuLayoutPool: List<LayoutData> = emptyList(),
-    @Help("ID of the sub-menu layout within the subMenuLayoutPool to display.")
+    @Help("ID of the buy/sell sub-menu layout within the layout pool. Uses shop_button: prefixed placeholders. Leave empty for no sub-menu.")
     val subMenuLayoutId: String = "",
     @Help("Title for the sub-menu. Supports color codes and placeholders. {item_name} placeholder available.")
     val subMenuTitle: String = "<yellow>{item_name} Options",
@@ -112,6 +110,8 @@ class ShopDefinitionEntry(
     val amountInputWidth: Int = 4,
     @Help("Maximum allowed length for the custom amount input.")
     val amountInputMaxLength: Int = 10,
+    @Help("Message shown when the entered custom amount is not a positive whole number.")
+    val invalidAmountMessage: String = "<red>Please enter a valid amount",
 
     @Help("Message when the player cannot afford a purchase. Placeholders: {amount}, {price}.")
     val cannotAffordMessage: String = "<red>You cannot afford this purchase",
@@ -149,6 +149,6 @@ class ShopDefinitionEntry(
     /** Whether this entry uses the layout pool mode for the main menu. */
     val usesLayoutPool: Boolean get() = layoutPool.isNotEmpty() && mainLayoutId.isNotBlank()
 
-    /** Whether this entry has a sub-menu layout pool configured. */
-    val hasSubMenu: Boolean get() = subMenuLayoutPool.isNotEmpty() && subMenuLayoutId.isNotBlank()
+    /** Whether this entry has a sub-menu layout configured in [layoutPool]. */
+    val hasSubMenu: Boolean get() = subMenuLayoutId.isNotBlank() && layoutPool.any { it.id == subMenuLayoutId }
 }
