@@ -4,19 +4,25 @@
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Target](https://img.shields.io/badge/Target-Paper%20/%20Folia%20/%20BTC--CORE-blue)
 
-**Shops Extension** is a commerce system for **TypeWriter**, engineered for **BTC Studio** infrastructure. It provides an UltimateShop-like shopping experience with dynamic pricing and stock handling.
+**Shops Extension** is a commerce system for **TypeWriter**, engineered for **BTC Studio** infrastructure. It provides a full-featured shop experience with dynamic pricing and stock handling.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🛒 Dynamic Marketplace
-- **UltimateShop Style**: Familiar shop interface and interaction models.
-- **Dynamic Pricing**: Prices that fluctuate based on supply and demand logic.
+- **Dynamic & Fixed Pricing**: Prices that fluctuate based on supply and demand, or stay fixed.
+- **Categories & Item Pools**: Organize offers into categories, with randomized item pools.
 
-### 📦 Stock Management
-- **Inventory Tracking**: Real-time tracking of shop stock levels.
-- **GUI Services**: Simple and effective graphical interfaces for transactions.
+### 📦 Stock & Limits
+- **Stock Management**: Real-time tracking of shop stock levels.
+- **Per-Player & Global Limits**: Buy/sell limits per player and globally.
+- **Taxes & Promotions**: Global and per-item taxes, price trends, and promotions.
+
+### 🖥️ GUI Integration
+- **Full GUIExtension Integration**: Customizable layouts via the GUI/OmniGUI extension.
+- **Buy/Sell Toggles**: Configurable per item, with adjustable refresh rates.
+- **Transaction History**: Persistent storage via artifact.
 
 ---
 
