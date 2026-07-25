@@ -24,6 +24,10 @@ class StockService(
     }
 
     fun buy(shopId: String, itemId: Int, amount: Int, strategy: PriceStrategy, playerUuid: UUID? = null): Int {
+        // stockMax <= 0 means unlimited supply (same "0 = unlimited" convention as the price
+        // bounds and limits). Fixed-price items default to stockMax = 0, so enforcing stock here
+        // made every purchase throw "Insufficient stock: 0 < 1". Nothing to track when unlimited.
+        if (strategy.stockMax <= 0) return Int.MAX_VALUE
         val current = getStock(shopId, itemId, strategy.stockMax, playerUuid)
         val updated = buy(current, amount)
         persistence.setStock(shopId, itemId, updated, playerUuid)
@@ -38,6 +42,9 @@ class StockService(
     }
 
     fun sell(shopId: String, itemId: Int, amount: Int, strategy: PriceStrategy, playerUuid: UUID? = null): Int {
+        // Unlimited stock: selling into an infinite pool tracks nothing (and sell(current, amount,
+        // max=0) would clamp the stored stock to 0, corrupting a later switch to limited stock).
+        if (strategy.stockMax <= 0) return Int.MAX_VALUE
         val current = getStock(shopId, itemId, strategy.stockMax, playerUuid)
         val updated = sell(current, amount, strategy.stockMax)
         persistence.setStock(shopId, itemId, updated, playerUuid)

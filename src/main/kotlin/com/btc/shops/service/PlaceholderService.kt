@@ -26,7 +26,7 @@ class PlaceholderService(
 
         val shopKey = params.substring(first + 1, second)
         val shop =
-            Query.findByName<ShopDefinitionEntry>(shopKey)
+            Query(ShopDefinitionEntry::class).findByName(shopKey)
                 ?: Query.findById<ShopDefinitionEntry>(shopKey)
                 ?: return null
 

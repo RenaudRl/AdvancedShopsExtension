@@ -32,7 +32,7 @@ class PromotionService {
     }
 
     fun getActivePromotions(shopId: String): List<ShopPromotionEntry> {
-        return Query.find<ShopPromotionEntry>().filter { promo ->
+        return Query(ShopPromotionEntry::class).find().filter { promo ->
             promo.targetShop.get()?.id == shopId && !promo.isExpired
         }.toList()
     }

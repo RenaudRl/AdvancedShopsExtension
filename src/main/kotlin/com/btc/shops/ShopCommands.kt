@@ -31,7 +31,7 @@ class ShopArgumentType : CustomArgumentType.Converted<String, String> {
         builder: SuggestionsBuilder,
     ): CompletableFuture<Suggestions> {
         val input = builder.remaining.lowercase()
-        Query.find<ShopDefinitionEntry>()
+        Query(ShopDefinitionEntry::class).find()
             .filter { it.name.lowercase().startsWith(input) || it.id.lowercase().startsWith(input) }
             .forEach { builder.suggest(it.id) }
         return builder.buildFuture()

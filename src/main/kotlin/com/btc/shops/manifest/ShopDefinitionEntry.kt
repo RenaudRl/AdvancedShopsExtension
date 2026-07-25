@@ -1,6 +1,6 @@
 package com.btc.shops.manifest
 
-import btcrenaud.gui.LayoutData
+import btcrenaud.gui.SimpleLayoutData
 import com.typewritermc.core.books.pages.Colors
 import com.typewritermc.core.entries.Ref
 import com.typewritermc.core.entries.emptyRef
@@ -60,8 +60,8 @@ class ShopDefinitionEntry(
     @Help("Item pools referenced by this shop. Pool items are merged into the shop display.")
     val itemPools: List<Ref<ShopPoolEntry>> = emptyList(),
 
-    @Help("Layout pool for declarative menu design. Holds every layout this shop uses — the main menu and the buy/sell sub-menu are both selected out of this pool by id.")
-    val layoutPool: List<LayoutData> = emptyList(),
+    @Help("Layout pool for declarative menu design. Holds every layout this shop uses — the main menu and the buy/sell sub-menu are both selected out of this pool by id. Shop menus are simple grids: shop items are placed at SHOP_ITEM markers and buttons are shop_button: tagged slots.")
+    val layoutPool: List<SimpleLayoutData> = emptyList(),
     @Help("ID of the main layout within the layout pool to display.")
     val mainLayoutId: String = "",
 

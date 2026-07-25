@@ -31,7 +31,12 @@ class ResetService(
 
     private fun checkGlobalResets() {
         val now = System.currentTimeMillis()
-        Query.find<ShopDefinitionEntry>().forEach { definition ->
+        // Use the non-inline instance query, NOT the inline reified `Query.find<T>()`. The inline
+        // form expands into ResetService and emits a synthetic `$$inlined$find$1` class that
+        // Typewriter's extension ClassLoader cannot resolve when this scheduler task runs
+        // (NoClassDefFoundError every tick). `Query(klass).find()` is a plain constructor + method
+        // call whose lambdas live in the engine jar, so nothing synthetic is generated here.
+        Query(ShopDefinitionEntry::class).find().forEach { definition ->
             if (shouldReset(definition, now)) {
                 performReset(definition)
             }
@@ -86,20 +91,26 @@ class ResetService(
             is ResetPolicy.None -> Long.MAX_VALUE
             is ResetPolicy.Interval -> now + TimeUnit.SECONDS.toMillis(policy.seconds)
             is ResetPolicy.Daily -> {
-                val base = zoned.withHour(policy.hour).withMinute(policy.minute).withSecond(0).withNano(0)
+                val base = zoned.withHour(policy.hour.coerceIn(0, 23))
+                    .withMinute(policy.minute.coerceIn(0, 59)).withSecond(0).withNano(0)
                 val next = if (base.toInstant().toEpochMilli() > now) base else base.plusDays(1)
                 next.toInstant().toEpochMilli()
             }
             is ResetPolicy.Weekly -> {
-                val base = zoned.with(TemporalAdjusters.nextOrSame(DayOfWeek.of(policy.day)))
-                    .withHour(policy.hour).withMinute(policy.minute).withSecond(0).withNano(0)
+                // Clamp every component: the web editor serializes an un-set number as 0, and
+                // DayOfWeek.of(0) throws (valid range is 1..7) — which crashed this task on every
+                // tick, aborting shouldReset() and with it the shop opening.
+                val base = zoned.with(TemporalAdjusters.nextOrSame(DayOfWeek.of(policy.day.coerceIn(1, 7))))
+                    .withHour(policy.hour.coerceIn(0, 23))
+                    .withMinute(policy.minute.coerceIn(0, 59)).withSecond(0).withNano(0)
                 val next = if (base.toInstant().toEpochMilli() > now) base else base.plusWeeks(1)
                 next.toInstant().toEpochMilli()
             }
             is ResetPolicy.Monthly -> {
                 val day = policy.day
                 val base = zoned.withDayOfMonth(day.coerceIn(1, zoned.toLocalDate().lengthOfMonth()))
-                    .withHour(policy.hour).withMinute(policy.minute).withSecond(0).withNano(0)
+                    .withHour(policy.hour.coerceIn(0, 23))
+                    .withMinute(policy.minute.coerceIn(0, 59)).withSecond(0).withNano(0)
                 val next = if (base.toInstant().toEpochMilli() > now) base else base.plusMonths(1)
                     .withDayOfMonth(day.coerceIn(1, base.plusMonths(1).toLocalDate().lengthOfMonth()))
                 next.toInstant().toEpochMilli()

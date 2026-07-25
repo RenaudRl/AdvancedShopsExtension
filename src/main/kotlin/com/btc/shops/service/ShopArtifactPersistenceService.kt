@@ -33,7 +33,7 @@ class ShopArtifactPersistenceService {
      */
     private val artifactOrNull: ShopArtifact?
         get() = Query.findById<ShopArtifact>("shop_artifact")
-            ?: Query.findByName<ShopArtifact>("shop_artifact")
+            ?: Query(ShopArtifact::class).findByName("shop_artifact")
 
     private val artifact: ShopArtifact
         get() = artifactOrNull ?: ShopArtifact("shop_artifact", "Shop Data")

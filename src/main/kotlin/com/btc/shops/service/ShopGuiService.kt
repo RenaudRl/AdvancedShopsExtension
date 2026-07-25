@@ -4,7 +4,6 @@ import btcrenaud.gui.GuiSlotBuilder
 import btcrenaud.gui.GuiType
 import btcrenaud.gui.InventorySize
 import btcrenaud.gui.LayoutData
-import btcrenaud.gui.SimpleLayoutData
 import btcrenaud.gui.api.*
 import btcrenaud.gui.services.MenuSessionService
 import com.btc.shops.manifest.*
@@ -166,24 +165,19 @@ class ShopGuiService(
         val itemPositions = mutableListOf<SlotPos>()
 
         val cleanedPool = definition.layoutPool.mapNotNull { layoutData ->
-            when (layoutData) {
-                is SimpleLayoutData -> {
-                    val filteredItems = layoutData.items.filter { item ->
-                        if (isShopItemMarker(item)) {
-                            GuiSlotBuilder.expandPositions(item).forEach { (px, py) ->
-                                itemPositions.add(SlotPos(px, py))
-                            }
-                            false // Remove from cleaned layout
-                        } else true
+            val filteredItems = layoutData.items.filter { item ->
+                if (isShopItemMarker(item)) {
+                    GuiSlotBuilder.expandPositions(item).forEach { (px, py) ->
+                        itemPositions.add(SlotPos(px, py))
                     }
-                    if (filteredItems.isEmpty()) null else layoutData.copy(items = filteredItems)
-                }
-                else -> layoutData
+                    false // Remove from cleaned layout
+                } else true
             }
+            if (filteredItems.isEmpty()) null else layoutData.copy(items = filteredItems)
         }
 
         // 2. Parse the cleaned pool once
-        val cleanedPoolMap = cleanedPool.filterNotNull().associateBy { it.id }
+        val cleanedPoolMap: Map<String, LayoutData> = cleanedPool.associateBy { it.id }
         val baseLayout: MenuLayout = if (cleanedPoolMap.containsKey(definition.mainLayoutId)) {
             LayoutParser.parse(player, ctx, GuiType.CUSTOM, size.slots, cleanedPoolMap, cleanedPoolMap[definition.mainLayoutId]!!)
         } else {
@@ -196,9 +190,15 @@ class ShopGuiService(
         val pageItems = effectiveItems.drop(startIndex).take(pageSize)
         val dynamicSlots = mutableListOf<GuiSlot>()
 
+        // Marker positions that actually received a product this page. Positions beyond the
+        // product count stay free so the filler covers them — otherwise a shop with fewer
+        // products than marker slots renders holes where the leftover markers were.
+        val usedPositions = mutableSetOf<Pair<Int, Int>>()
+
         pageItems.forEachIndexed { i, cfg ->
             if (i >= itemPositions.size) return@forEachIndexed
             val pos = itemPositions[i]
+            usedPositions.add(pos.x to pos.y)
 
             if (!cfg.criteria.matches(player)) {
                 val lockedStack = definition.lockedItem.get(player).build(player)
@@ -221,7 +221,14 @@ class ShopGuiService(
             ))
         }
 
-        // 4. Inject dynamic slots
+        // 4. Fill the slots the author left empty, then inject everything
+        val occupied = mutableSetOf<Pair<Int, Int>>()
+        cleanedPool.firstOrNull { it.id == definition.mainLayoutId }?.items?.forEach { item ->
+            occupied.addAll(GuiSlotBuilder.expandPositions(item))
+        }
+        occupied.addAll(usedPositions)
+        dynamicSlots.addAll(buildFillerSlots(player, definition, size.slots, occupied))
+
         val augmentedLayout = AugmentedSimpleLayout(
             inner = baseLayout,
             dynamicSlots = dynamicSlots,
@@ -275,16 +282,26 @@ class ShopGuiService(
             }
 
             // The sub-menu is just another layout in the shop's single pool, picked by id.
-            val pool = definition.layoutPool.associateBy { it.id }
+            val pool: Map<String, LayoutData> = definition.layoutPool.associateBy { it.id }
             val baseLayout: MenuLayout = if (pool.containsKey(definition.subMenuLayoutId)) {
                 LayoutParser.parse(player, ctx, GuiType.CUSTOM, size.slots, pool, pool[definition.subMenuLayoutId]!!)
             } else {
                 EmptyLayout
             }
 
+            // Same filler treatment as the main menu, so the sub-menu isn't full of holes.
+            val subOccupied = mutableSetOf<Pair<Int, Int>>()
+            definition.layoutPool.firstOrNull { it.id == definition.subMenuLayoutId }?.items?.forEach { item ->
+                subOccupied.addAll(GuiSlotBuilder.expandPositions(item))
+            }
+            val filledLayout = AugmentedSimpleLayout(
+                inner = baseLayout,
+                dynamicSlots = buildFillerSlots(player, definition, size.slots, subOccupied),
+            )
+
             // Wrap with button resolver (passes itemIndex for sub-menu commands)
             val resolvedLayout = ShopButtonResolverLayout(
-                inner = baseLayout,
+                inner = filledLayout,
                 player = player,
                 definition = definition,
                 page = 0,
@@ -381,6 +398,31 @@ class ShopGuiService(
         return interactions
     }
 
+    /**
+     * Decorative background for every slot the author left empty.
+     *
+     * [ShopDefinitionEntry.fillerItem] was configured-but-never-read: shops rendered with holes
+     * instead of the background the author picked. Only genuinely free positions are filled, so
+     * the filler can never cover a layout button or a shop item slot.
+     */
+    private fun buildFillerSlots(
+        player: Player,
+        definition: ShopDefinitionEntry,
+        slotCount: Int,
+        occupied: Set<Pair<Int, Int>>,
+    ): List<GuiSlot> {
+        val resolved = definition.fillerItem.get(player)
+        if (resolved == Item.Empty) return emptyList()
+        val stack = resolved.build(player)
+        val slots = mutableListOf<GuiSlot>()
+        for (index in 0 until slotCount) {
+            val pos = (index % 9) to (index / 9)
+            if (pos in occupied) continue
+            slots.add(GuiSlot(x = pos.first, y = pos.second, item = stack.clone(), allowPickup = false))
+        }
+        return slots
+    }
+
     private fun buildShopItem(cfg: ShopItemConfig, player: Player, definition: ShopDefinitionEntry): ItemStack {
         val stack = cfg.item.get(player).build(player)
         val meta = stack.itemMeta ?: return stack
@@ -433,15 +475,10 @@ class ShopGuiService(
     private fun countItemSlots(definition: ShopDefinitionEntry): Int {
         var count = 0
         definition.layoutPool.forEach { layoutData ->
-            when (layoutData) {
-                is SimpleLayoutData -> {
-                    layoutData.items.forEach { item ->
-                        if (isShopItemMarker(item)) {
-                            count += GuiSlotBuilder.expandPositions(item).size
-                        }
-                    }
+            layoutData.items.forEach { item ->
+                if (isShopItemMarker(item)) {
+                    count += GuiSlotBuilder.expandPositions(item).size
                 }
-                else -> {}
             }
         }
         return count
