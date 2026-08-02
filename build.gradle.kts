@@ -24,7 +24,7 @@ dependencies {
 }
 
 group = "btc.renaud"
-version = "1.1"
+version = "1.2"
 
 typewriter {
     namespace = "btcrenaud"
