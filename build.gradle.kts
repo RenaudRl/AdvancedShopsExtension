@@ -11,7 +11,6 @@ repositories {
     maven("https://maven.typewritermc.com/beta/")
     maven("https://maven.typewritermc.com/external")
     maven("https://jitpack.io")
-    mavenLocal()
 }
 
 dependencies {
@@ -21,6 +20,7 @@ dependencies {
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") { isTransitive = false }
     compileOnly("me.clip:placeholderapi:2.11.6")
     compileOnly(project(":Typewriter-OmniGUIExtension"))
+    testImplementation(kotlin("test"))
 }
 
 group = "btc.renaud"

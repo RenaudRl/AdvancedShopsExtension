@@ -94,7 +94,12 @@ class ShopTransactionHandler(
             return
         }
 
-        if (!economy.withdraw(player.uniqueId, taxedCost)) {
+        // Two gates on purpose. `canAfford` is the one that produces the player-facing refusal,
+        // and `withdraw` re-checks internally so no economy adapter can ever settle a purchase
+        // that leaves the player below zero.
+        if (!economy.canAfford(player.uniqueId, taxedCost) ||
+            !economy.withdraw(player.uniqueId, taxedCost)
+        ) {
             player.sendMessage(
                 definition.cannotAffordMessage.replace("{amount}", amount.toString())
                     .replace("{price}", formatPrice(taxedCost)).toComponent()
@@ -271,7 +276,14 @@ class ShopTransactionHandler(
 
         if (unitPrice <= 0.0) return
 
-        val balance = economy.getBalance(player.uniqueId)
+        // An unreadable balance buys nothing: `handleBuy` would refuse anyway, but reporting it
+        // here keeps "buy max" from silently doing nothing at all.
+        val balance = economy.balanceOrNull(player.uniqueId)
+        if (balance == null) {
+            player.sendMessage(definition.cannotAffordMessage.toComponent())
+            playSound(player, definition.deniedSound)
+            return
+        }
         val taxRate = if (definition.taxRate > 0) (1.0 + definition.taxRate / 100.0) else 1.0
         val maxByBalance = (balance / (unitPrice * taxRate)).toInt()
 
@@ -292,7 +304,21 @@ class ShopTransactionHandler(
             maxByLimits = minOf(maxByLimits, globalLimitService.remainingGlobal(definition, "buy", definition.globalBuyLimit))
         }
 
-        val maxAmount = minOf(maxByBalance, maxByInventory, maxByLimits).coerceAtLeast(1)
+        // Never floor this to 1: doing so turned "you can afford none of these" into a forced
+        // single purchase, which is how an empty wallet ended up in the negative.
+        val maxAmount = minOf(maxByBalance, maxByInventory, maxByLimits)
+        if (maxAmount <= 0) {
+            val message =
+                if (maxByBalance <= 0) definition.cannotAffordMessage
+                else if (maxByInventory <= 0) definition.inventoryFullMessage
+                else definition.limitReachedMessage
+            player.sendMessage(
+                message.replace("{amount}", "1")
+                    .replace("{price}", formatPrice(unitPrice * taxRate)).toComponent()
+            )
+            playSound(player, definition.deniedSound)
+            return
+        }
         handleBuy(player, cfg, definition, maxAmount)
     }
 
