@@ -19,6 +19,22 @@
 - **Per-Player & Global Limits**: Buy/sell limits per player and globally.
 - **Taxes & Promotions**: Global and per-item taxes, price trends, and promotions.
 
+### 🏷️ Display Formats
+- **Shop-wide defaults**: `defaultNameFormat` / `defaultLoreFormat` apply to every item that
+  declares no name or lore of its own. An item that declares one keeps it untouched.
+- **Tokens**: `{item}`, `{buy}`, `{sell}`, `{stock}`, `{stock_max}`, `{currency}`. A lore line
+  asking for an unavailable price is dropped instead of rendering empty.
+
+### 🔔 Transaction Events
+- **`ShopTransactionEvent`**: fired once a purchase or a sale has completed. Other extensions —
+  a Discord relay, an audit log, an analytics pipeline — plug in here without Shops knowing they
+  exist. Announced after the fact, so it carries no cancellation.
+- **`notificationWebhookId`**: the id a shop author writes on the definition. Shops does not
+  resolve it and does not know what a webhook is; it travels on the event for whoever handles
+  Discord.
+- A listener that throws is reported and the transaction stands: nothing undoes a purchase that
+  has already been paid for and delivered.
+
 ### 🖥️ GUI Integration
 - **Full GUIExtension Integration**: Customizable layouts via the GUI/OmniGUI extension.
 - **Buy/Sell Toggles**: Configurable per item, with adjustable refresh rates.

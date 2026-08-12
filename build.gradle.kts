@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     kotlin("jvm") version "2.3.20"
     id("com.typewritermc.module-plugin") version "2.1.0"
 }
@@ -14,7 +14,7 @@ repositories {
 }
 
 dependencies {
-    // Paper API comes from the typewriter { extension { paper() } } DSL below — the module-plugin
+    // Paper API comes from the typewriter { extension { paper() } } DSL below â€” the module-plugin
     // resolves it against engineVersion, same as every other extension (GUI, QuestCodex). A hardcoded
     // compileOnly("io.papermc.paper:paper-api:1.21.4-...") here was stale and redundant with that.
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") { isTransitive = false }
@@ -24,7 +24,7 @@ dependencies {
 }
 
 group = "btc.renaud"
-version = "1.3"
+version = "1.4"
 
 typewriter {
     namespace = "btcrenaud"

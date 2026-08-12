@@ -83,7 +83,14 @@ class ShopGuiService(
     //  Open / Refresh / Navigate
     // ──────────────────────────────────────────────
 
-    fun open(player: Player, definition: ShopDefinitionEntry, page: Int = 0, delayTicks: Long = 3L) {
+    fun open(
+        player: Player,
+        definition: ShopDefinitionEntry,
+        page: Int = 0,
+        delayTicks: Long = 3L,
+        targetViewId: String? = null,
+        pushHistory: Boolean = true,
+    ) {
         val task = Runnable {
             if (!definition.criteria.matches(player)) {
                 player.sendMessage(definition.criteriaFailMessage.toComponent())
@@ -96,7 +103,7 @@ class ShopGuiService(
                 }
             }
 
-            openFromLayoutPool(player, definition, page)
+            openFromLayoutPool(player, definition, page, targetViewId, pushHistory)
         }
 
         if (delayTicks <= 0L) {
@@ -143,11 +150,14 @@ class ShopGuiService(
         player: Player,
         definition: ShopDefinitionEntry,
         page: Int,
+        targetViewId: String? = null,
+        pushHistory: Boolean = true,
     ) {
         val ctx = context { }
         val effectiveItems = shopPoolService.resolveItems(definition)
-        val rows = definition.rows.coerceIn(1, 6)
-        val size = when (rows) {
+        val tabMode = definition.usesTabMode
+        val standaloneRows = definition.rows.coerceIn(1, 6)
+        val standaloneSize = when (standaloneRows) {
             1 -> InventorySize.SIZE_9
             2 -> InventorySize.SIZE_18
             3 -> InventorySize.SIZE_27
@@ -155,6 +165,9 @@ class ShopGuiService(
             5 -> InventorySize.SIZE_45
             else -> InventorySize.SIZE_54
         }
+        // A tab-mode shop is rendered inside the shared chassis' fixed 6-row inventory — the
+        // chassis owns the size, `rows` only matters when the shop still opens on its own.
+        val size = if (tabMode) InventorySize.SIZE_54 else standaloneSize
 
         // 1. Extract SHOP_ITEM positions directly from raw layout data (no parse needed).
         //    Repetition is expanded by GuiSlotBuilder so SHOP_ITEM markers spread exactly like
@@ -164,7 +177,10 @@ class ShopGuiService(
         data class SlotPos(val x: Int, val y: Int)
         val itemPositions = mutableListOf<SlotPos>()
 
-        val cleanedPool = definition.layoutPool.mapNotNull { layoutData ->
+        // A layout emptied of its markers is KEPT, empty. Dropping it made it unreachable in the
+        // pool, and the chassis frame pointing at it then rendered nothing — a shop screen whose
+        // whole grid is made of markers, or a still-empty tab, silently disappeared.
+        val cleanedPool = definition.layoutPool.map { layoutData ->
             val filteredItems = layoutData.items.filter { item ->
                 if (isShopItemMarker(item)) {
                     GuiSlotBuilder.expandPositions(item).forEach { (px, py) ->
@@ -173,18 +189,63 @@ class ShopGuiService(
                     false // Remove from cleaned layout
                 } else true
             }
-            if (filteredItems.isEmpty()) null else layoutData.copy(items = filteredItems)
+            layoutData.copy(items = filteredItems)
         }
 
-        // 2. Parse the cleaned pool once
-        val cleanedPoolMap: Map<String, LayoutData> = cleanedPool.associateBy { it.id }
-        val baseLayout: MenuLayout = if (cleanedPoolMap.containsKey(definition.mainLayoutId)) {
-            LayoutParser.parse(player, ctx, GuiType.CUSTOM, size.slots, cleanedPoolMap, cleanedPoolMap[definition.mainLayoutId]!!)
+        // 2. Resolve the base layout — either the shop's own single layout (standalone), or the
+        //    shared chassis with the shop's views merged in (tab mode), exactly like every other
+        //    extension resolves against a shell via MenuViewSupport.
+        var activeViewId: String? = null
+        var breadcrumb: List<String> = emptyList()
+        val baseLayout: MenuLayout
+        val rawTitle: String
+        // The extended chassis also occupies the player's inventory and hotbar. Known only after
+        // the chassis is resolved, but read when the MenuDefinition is built.
+        var extendedChassis = false
+
+        if (tabMode) {
+            val inherited = MenuViewSupport.inherit(
+                baseMenuId = definition.baseMenuId,
+                ownPool = cleanedPool,
+                ownViews = definition.views,
+                ownMainLayoutId = definition.mainLayoutId.ifBlank { null },
+                ownDefaultViewId = definition.defaultViewId,
+            )
+            val rootLayoutId = MenuViewSupport.extendedRootLayoutId(inherited, inherited.mainLayoutId)
+            extendedChassis = MenuViewSupport.isExtendedRoot(rootLayoutId)
+            val resolved = MenuViewSupport.resolve(
+                player = player,
+                context = ctx,
+                guiType = GuiType.CUSTOM,
+                totalSize = size.slots,
+                pool = inherited.pool,
+                mainLayoutId = rootLayoutId,
+                views = inherited.views,
+                defaultViewId = inherited.defaultViewId,
+                targetViewId = targetViewId,
+                baseTitle = definition.title,
+            )
+            baseLayout = resolved.layout
+            rawTitle = resolved.rawTitle
+            activeViewId = resolved.activeViewId
+            breadcrumb = resolved.breadcrumb
         } else {
-            EmptyLayout
+            val cleanedPoolMap: Map<String, LayoutData> = cleanedPool.associateBy { it.id }
+            baseLayout = if (cleanedPoolMap.containsKey(definition.mainLayoutId)) {
+                LayoutParser.parse(player, ctx, GuiType.CUSTOM, size.slots, cleanedPoolMap, cleanedPoolMap[definition.mainLayoutId]!!)
+            } else {
+                EmptyLayout
+            }
+            rawTitle = applyPlaceholders(player, definition.title)
         }
 
-        // 3. Build dynamic shop item slots with configurable click actions
+        // 3. Build dynamic shop item slots with configurable click actions. SHOP_ITEM markers are
+        //    declared in the shop's own layout, in LOCAL coordinates — in tab mode that layout
+        //    ends up nested inside the chassis' content frame, which auto-offsets its static items
+        //    but not slots injected after the fact via AugmentedSimpleLayout, so the marker
+        //    positions (and the filler below) must be shifted by contentX/contentY by hand.
+        val offsetX = if (tabMode) definition.contentX else 0
+        val offsetY = if (tabMode) definition.contentY else 0
         val pageSize = itemPositions.size
         val startIndex = page * pageSize
         val pageItems = effectiveItems.drop(startIndex).take(pageSize)
@@ -197,7 +258,8 @@ class ShopGuiService(
 
         pageItems.forEachIndexed { i, cfg ->
             if (i >= itemPositions.size) return@forEachIndexed
-            val pos = itemPositions[i]
+            val local = itemPositions[i]
+            val pos = SlotPos(local.x + offsetX, local.y + offsetY)
             usedPositions.add(pos.x to pos.y)
 
             if (!cfg.criteria.matches(player)) {
@@ -221,13 +283,31 @@ class ShopGuiService(
             ))
         }
 
-        // 4. Fill the slots the author left empty, then inject everything
+        // 4. Fill the slots the author left empty, then inject everything. In tab mode the filler
+        //    must stay confined to the shop's own content rectangle — the chassis' domain strip
+        //    and action row live in the same 6-row inventory and must not be painted over.
         val occupied = mutableSetOf<Pair<Int, Int>>()
-        cleanedPool.firstOrNull { it.id == definition.mainLayoutId }?.items?.forEach { item ->
-            occupied.addAll(GuiSlotBuilder.expandPositions(item))
+        if (tabMode) {
+            cleanedPool.forEach { layoutData ->
+                layoutData.items.forEach { item ->
+                    GuiSlotBuilder.expandPositions(item).forEach { (px, py) ->
+                        occupied.add(px + offsetX to py + offsetY)
+                    }
+                }
+            }
+        } else {
+            cleanedPool.firstOrNull { it.id == definition.mainLayoutId }?.items?.forEach { item ->
+                occupied.addAll(GuiSlotBuilder.expandPositions(item))
+            }
         }
         occupied.addAll(usedPositions)
-        dynamicSlots.addAll(buildFillerSlots(player, definition, size.slots, occupied))
+        dynamicSlots.addAll(
+            if (tabMode) {
+                buildFillerSlots(player, definition, definition.contentColumns, definition.contentRows, offsetX, offsetY, occupied)
+            } else {
+                buildFillerSlots(player, definition, 9, standaloneRows, 0, 0, occupied)
+            }
+        )
 
         val augmentedLayout = AugmentedSimpleLayout(
             inner = baseLayout,
@@ -244,7 +324,6 @@ class ShopGuiService(
         )
 
         // 6. Build title and register
-        val rawTitle = applyPlaceholders(player, definition.title)
         val menuDef = MenuDefinition(
             id = "shop:${definition.id}:${player.uniqueId}",
             type = GuiType.CUSTOM,
@@ -252,10 +331,17 @@ class ShopGuiService(
             rawTitle = rawTitle,
             size = size,
             layout = resolvedLayout,
-        )
+            activeViewId = activeViewId,
+            breadcrumb = breadcrumb,
+            viewSwitcher = if (tabMode) { p, viewId ->
+                open(p, definition, page = 0, delayTicks = 0L, targetViewId = viewId, pushHistory = false)
+            } else null,
+        ).also {
+            it.extendToPlayerInventory = extendedChassis
+        }
 
         openSessions[player.uniqueId] = ShopSession(definition, page)
-        MenuSessionService.register(player, menuDef, pushHistory = page == 0)
+        MenuSessionService.register(player, menuDef, pushHistory = if (tabMode) pushHistory else page == 0)
     }
 
     // ──────────────────────────────────────────────
@@ -296,7 +382,7 @@ class ShopGuiService(
             }
             val filledLayout = AugmentedSimpleLayout(
                 inner = baseLayout,
-                dynamicSlots = buildFillerSlots(player, definition, size.slots, subOccupied),
+                dynamicSlots = buildFillerSlots(player, definition, 9, rows, 0, 0, subOccupied),
             )
 
             // Wrap with button resolver (passes itemIndex for sub-menu commands)
@@ -403,59 +489,102 @@ class ShopGuiService(
      *
      * [ShopDefinitionEntry.fillerItem] was configured-but-never-read: shops rendered with holes
      * instead of the background the author picked. Only genuinely free positions are filled, so
-     * the filler can never cover a layout button or a shop item slot.
+     * the filler can never cover a layout button or a shop item slot. The rectangle is bounded
+     * (rather than the whole inventory) so a tab-mode shop's filler never paints over the shared
+     * chassis' domain strip or action row, which live in the same 6-row inventory.
      */
     private fun buildFillerSlots(
         player: Player,
         definition: ShopDefinitionEntry,
-        slotCount: Int,
+        width: Int,
+        height: Int,
+        offsetX: Int,
+        offsetY: Int,
         occupied: Set<Pair<Int, Int>>,
     ): List<GuiSlot> {
         val resolved = definition.fillerItem.get(player)
         if (resolved == Item.Empty) return emptyList()
         val stack = resolved.build(player)
         val slots = mutableListOf<GuiSlot>()
-        for (index in 0 until slotCount) {
-            val pos = (index % 9) to (index / 9)
-            if (pos in occupied) continue
-            slots.add(GuiSlot(x = pos.first, y = pos.second, item = stack.clone(), allowPickup = false))
+        for (row in 0 until height) {
+            for (column in 0 until width) {
+                val pos = (column + offsetX) to (row + offsetY)
+                if (pos in occupied) continue
+                slots.add(GuiSlot(x = pos.first, y = pos.second, item = stack.clone(), allowPickup = false))
+            }
         }
         return slots
     }
 
+    /**
+     * Substitutes a shop's format tokens on a raw line.
+     *
+     * `{buy}` / `{sell}` / `{stock}` / `{stock_max}` / `{currency}` / `{item}` are configuration
+     * tokens, not placeholders: they are replaced here, on the string, after the placeholder pass
+     * and before MiniMessage parsing.
+     *
+     * @param baseName the item's own display name, for `{item}`.
+     * @return the substituted line, or `null` when it asks for an unavailable price — a
+     *   "Sell: {sell}" line on an unsellable item must disappear, not render empty.
+     */
+    private fun expandItemTokens(
+        template: String,
+        cfg: ShopItemConfig,
+        definition: ShopDefinitionEntry,
+        baseName: String,
+    ): String? {
+        var out = template
+        if (out.contains("{buy}")) {
+            if (!cfg.buyEnabled) return null
+            val price = getBuyPrice(definition, cfg, 1)
+            if (price <= 0) return null
+            out = out.replace("{buy}", formatPrice(price, definition))
+        }
+        if (out.contains("{sell}")) {
+            if (!cfg.sellEnabled) return null
+            val price = getSellPrice(definition, cfg, 1)
+            if (price <= 0) return null
+            out = out.replace("{sell}", formatPrice(price, definition))
+        }
+        if (out.contains("{stock}") || out.contains("{stock_max}")) {
+            val index = definition.items.indexOf(cfg)
+            val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
+            out = out
+                .replace("{stock_max}", cfg.dynamicPricing.stockMax.toString())
+                .replace("{stock}", stock.toString())
+        }
+        return out
+            .replace("{currency}", definition.currencySymbol)
+            .replace("{item}", baseName)
+    }
+
+    /** The item's own display name, re-serialized to MiniMessage so it can be re-injected. */
+    private fun baseDisplayName(meta: org.bukkit.inventory.meta.ItemMeta, stack: ItemStack): String =
+        meta.displayName()?.let { net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().serialize(it) }
+            ?: stack.type.name.lowercase().split('_')
+                .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
+
     private fun buildShopItem(cfg: ShopItemConfig, player: Player, definition: ShopDefinitionEntry): ItemStack {
         val stack = cfg.item.get(player).build(player)
         val meta = stack.itemMeta ?: return stack
+        val baseName = baseDisplayName(meta, stack)
 
-        if (cfg.name.isNotEmpty()) {
-            meta.displayName(applyPlaceholders(player, cfg.name).toComponent())
+        // Empty field => inherit the shop's format; filled field => kept as authored. The shop
+        // format never overrides an item's own wording, it only fills the gap.
+        val nameTemplate = cfg.name.ifBlank { definition.defaultNameFormat }
+        if (nameTemplate.isNotEmpty()) {
+            expandItemTokens(applyPlaceholders(player, nameTemplate), cfg, definition, baseName)
+                ?.let { meta.displayName(it.toComponent()) }
         }
 
         val baseLore = meta.lore()?.toList() ?: emptyList()
-        val customLore = cfg.lore.flatMap { line ->
-            applyPlaceholders(player, line).split("\n").map { it.toComponent() }
-        }
-        val priceLore = definition.priceLore.flatMap { line ->
-            var processed = applyPlaceholders(player, line)
-            var show = true
-            if (processed.contains("{buy}")) {
-                if (cfg.buyEnabled) {
-                    val price = getBuyPrice(definition, cfg, 1)
-                    if (price > 0) processed = processed.replace("{buy}", formatPrice(price, definition)) else show = false
-                } else {
-                    show = false
-                }
-            }
-            if (processed.contains("{sell}")) {
-                if (cfg.sellEnabled) {
-                    val price = getSellPrice(definition, cfg, 1)
-                    if (price > 0) processed = processed.replace("{sell}", formatPrice(price, definition)) else show = false
-                } else {
-                    show = false
-                }
-            }
-            if (show) processed.split("\n").map { it.toComponent() } else emptyList()
-        }
+        val loreTemplate = cfg.lore.ifEmpty { definition.defaultLoreFormat }
+        val customLore = loreTemplate
+            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), cfg, definition, baseName) }
+            .flatMap { line -> line.split("\n").map { it.toComponent() } }
+        val priceLore = definition.priceLore
+            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), cfg, definition, baseName) }
+            .flatMap { line -> line.split("\n").map { it.toComponent() } }
 
         val lore = baseLore + customLore + priceLore
         if (lore.isNotEmpty()) meta.lore(lore)

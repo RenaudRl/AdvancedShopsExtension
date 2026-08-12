@@ -1,6 +1,7 @@
 package com.btc.shops.service
 
 import com.btc.shops.api.Economy
+import com.btc.shops.api.ShopTransactionEvent
 import com.btc.shops.manifest.PriceMode
 import com.btc.shops.manifest.ShopDefinitionEntry
 import com.btc.shops.manifest.ShopItemConfig
@@ -9,7 +10,9 @@ import com.typewritermc.core.extension.annotations.Singleton
 import com.typewritermc.core.interaction.context
 import com.typewritermc.engine.paper.entry.matches
 import com.typewritermc.engine.paper.utils.Sound
+import com.typewritermc.engine.paper.logger
 import net.kyori.adventure.text.minimessage.MiniMessage
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
@@ -37,6 +40,35 @@ class ShopTransactionHandler(
     private val shopGuiService: ShopGuiService
 ) {
     private val miniMessage = MiniMessage.miniMessage()
+
+    /**
+     * Announces a completed transaction to whoever is listening.
+     *
+     * A listener that throws is a listener's problem: it must not undo a purchase that has already
+     * been paid for and delivered, so the failure is reported and the transaction stands.
+     */
+    private fun announce(
+        player: Player,
+        definition: ShopDefinitionEntry,
+        index: Int,
+        item: ItemStack,
+        amount: Int,
+        price: Double,
+        isBuy: Boolean,
+    ) {
+        val event = ShopTransactionEvent(
+            player = player,
+            shopId = definition.id,
+            itemIndex = index,
+            item = item.clone(),
+            amount = amount,
+            price = price,
+            isBuy = isBuy,
+            notificationWebhookId = definition.notificationWebhookId,
+        )
+        runCatching { Bukkit.getPluginManager().callEvent(event) }
+            .onFailure { logger.warning("A ShopTransactionEvent listener failed: ${it.message}") }
+    }
 
     private fun String.toComponent() = miniMessage.deserialize(this)
     private fun formatPrice(value: Double): String = String.format("%.2f", value)
@@ -157,6 +189,7 @@ class ShopTransactionHandler(
                 price = taxedCost
             )
         )
+        announce(player, definition, index, item, amount, taxedCost, isBuy = true)
 
         // Record price trend
         priceTrendService.recordPrice(definition.id, index, taxedCost / amount)
@@ -228,6 +261,7 @@ class ShopTransactionHandler(
                 price = taxedReward
             )
         )
+        announce(player, definition, index, template, amount, taxedReward, isBuy = false)
 
         // Record price trend
         priceTrendService.recordPrice(definition.id, index, taxedReward / amount)

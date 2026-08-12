@@ -1,6 +1,7 @@
 package com.btc.shops.manifest
 
 import btcrenaud.gui.SimpleLayoutData
+import btcrenaud.gui.api.MenuViewData
 import com.typewritermc.core.books.pages.Colors
 import com.typewritermc.core.entries.Ref
 import com.typewritermc.core.entries.emptyRef
@@ -64,6 +65,21 @@ class ShopDefinitionEntry(
     val layoutPool: List<SimpleLayoutData> = emptyList(),
     @Help("ID of the main layout within the layout pool to display.")
     val mainLayoutId: String = "",
+
+    @Help("open_gui entry used as a shared chassis (e.g. menu_shell). Empty = the shop opens as a standalone inventory, exactly as before. Set = the shop becomes a tab of that menu: its layout pool and views merge underneath the chassis.")
+    val baseMenuId: String = "",
+    @Help("Addressable screens of this shop when baseMenuId is set. The inherited chassis' '@view' frames resolve against the active view. Ignored in standalone mode.")
+    val views: List<MenuViewData> = emptyList(),
+    @Help("View opened first when baseMenuId is set. Empty = the first declared view.")
+    val defaultViewId: String? = null,
+    @Help("X origin of the content (SHOP_ITEM markers and filler) inside the inherited chassis. Ignored in standalone mode.")
+    val contentX: Int = 0,
+    @Help("Y origin of the content inside the inherited chassis. Ignored in standalone mode.")
+    val contentY: Int = 2,
+    @Help("Width in columns of the content area inside the inherited chassis. Ignored in standalone mode.")
+    val contentColumns: Int = 9,
+    @Help("Height in rows of the content area inside the inherited chassis. Ignored in standalone mode.")
+    val contentRows: Int = 3,
 
     @Help("ID of the buy/sell sub-menu layout within the layout pool. Uses shop_button: prefixed placeholders. Leave empty for no sub-menu.")
     val subMenuLayoutId: String = "",
@@ -137,6 +153,14 @@ class ShopDefinitionEntry(
     @Help("Message when a player reaches the purchase limit for an item.")
     val limitReachedMessage: String = "<red>Purchase limit reached",
 
+    @Help("Display name applied to items that declare none. Tokens: {item} = the item's own name, {buy}, {sell}, {stock}, {stock_max}, {currency}. Empty = keep the item's own name.")
+    val defaultNameFormat: String = "",
+    @Help("Lore applied to items that declare none. Same tokens as defaultNameFormat; a line asking for an unavailable price is dropped. Empty = no default lore.")
+    val defaultLoreFormat: List<String> = emptyList(),
+
+    @Help("Id of the webhook destination announcing this shop's transactions. Empty = no announcement. Shops does not resolve it: it travels on ShopTransactionEvent for whichever extension handles Discord.")
+    val notificationWebhookId: String = "",
+
     @Help("Price format template. Placeholders: {amount} = formatted price, {currency} = currency symbol. Default: {amount}")
     val priceFormat: String = "{amount}",
     @Help("Currency symbol used in price display. Example: $, €, pts.")
@@ -148,6 +172,15 @@ class ShopDefinitionEntry(
 
     /** Whether this entry uses the layout pool mode for the main menu. */
     val usesLayoutPool: Boolean get() = layoutPool.isNotEmpty() && mainLayoutId.isNotBlank()
+
+    /**
+     * Whether this shop renders as a tab of a shared chassis rather than as its own inventory.
+     *
+     * Driven by [baseMenuId] alone: an empty chassis id keeps every existing shop on the exact
+     * standalone path it has always taken, so adding these fields changes nothing for pages
+     * written before them.
+     */
+    val usesTabMode: Boolean get() = baseMenuId.isNotBlank()
 
     /** Whether this entry has a sub-menu layout configured in [layoutPool]. */
     val hasSubMenu: Boolean get() = subMenuLayoutId.isNotBlank() && layoutPool.any { it.id == subMenuLayoutId }
