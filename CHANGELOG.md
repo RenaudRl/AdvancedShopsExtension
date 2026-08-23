@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6 — 2026-08-24
+
+- Added the operator command tree `/tw shop admin` with shop listing, definition inspection,
+  player session control, runtime reset, direct-item stock management and transaction history.
+- Registered `typewriter.shop.admin` as an OP-only permission and kept
+  `typewriter.shop.open` available to players by default.
+- Added a manual reset entry point that shares the automatic reset behavior and recalculates the
+  next scheduled reset.
+- Fixed the public command permission registration so non-operators can open shops.
+
+## 1.5 — 2026-08-21
+
+- Rebuilt the extension against OmniGUI v0.13.
+
 ## 1.4 — 2026-08-12
 
 - Added `baseMenuId`, `views`, `defaultViewId` and a content rectangle (`contentX`, `contentY`,

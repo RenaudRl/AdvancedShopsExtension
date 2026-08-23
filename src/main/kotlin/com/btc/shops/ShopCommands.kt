@@ -12,6 +12,7 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder
 import com.typewritermc.core.entries.Query
 import com.typewritermc.core.extension.annotations.TypewriterCommand
 import com.typewritermc.engine.paper.command.dsl.*
+import com.typewritermc.engine.paper.utils.sendMini
 import io.papermc.paper.command.brigadier.argument.CustomArgumentType
 import org.koin.java.KoinJavaComponent
 import java.util.concurrent.CompletableFuture
@@ -44,9 +45,17 @@ class ShopArgumentType : CustomArgumentType.Converted<String, String> {
  */
 @TypewriterCommand
 fun CommandTree.shopCommands() = literal("shop") {
-    withPermission("typewriter.shop.open")
+    literal("admin") { buildShopAdminTree() }
+
+    executes {
+        sender.sendMini(
+            "<gold>Shop commands:</gold> <yellow>/tw shop <id></yellow> to open a shop, " +
+                "<yellow>/tw shop admin</yellow> for operator tools."
+        )
+    }
 
     argument("shop", ShopArgumentType(), String::class) { shopArg ->
+        withPermission(ShopPermissions.OPEN)
         executePlayer { player ->
             val definition = Query.findById<ShopDefinitionEntry>(shopArg()) ?: return@executePlayer
             KoinJavaComponent.get<ShopGuiService>(ShopGuiService::class.java)

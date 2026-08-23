@@ -77,6 +77,12 @@ class ResetService(
         globalLimitService.resetGlobal(definition, "sell")
     }
 
+    /** Applies the same full stock/limit reset as the automatic policy. */
+    fun resetNow(definition: ShopDefinitionEntry) {
+        performReset(definition)
+        nextReset[definition.id] = calculateNext(System.currentTimeMillis(), definition.reset)
+    }
+
     fun remaining(definition: ShopDefinitionEntry): Long {
         val now = System.currentTimeMillis()
         val next = nextReset.getOrPut(definition.id) { calculateNext(now, definition.reset) }

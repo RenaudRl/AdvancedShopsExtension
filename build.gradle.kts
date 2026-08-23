@@ -24,7 +24,7 @@ dependencies {
 }
 
 group = "btc.renaud"
-version = "1.5"
+version = "1.6"
 
 typewriter {
     namespace = "btcrenaud"
@@ -49,6 +49,6 @@ typewriter {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 

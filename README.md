@@ -1,6 +1,6 @@
 # Shops Extension
 
-![Java Version](https://img.shields.io/badge/Java-21-orange)
+![Java Version](https://img.shields.io/badge/Java-25-orange)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Target](https://img.shields.io/badge/Target-Paper%20/%20Folia%20/%20BTC--CORE-blue)
 
@@ -40,6 +40,13 @@
 - **Buy/Sell Toggles**: Configurable per item, with adjustable refresh rates.
 - **Transaction History**: Persistent storage via artifact.
 
+### Admin Operations
+- List and inspect loaded shop definitions.
+- Open, refresh and close a shop session for an online player.
+- Reset runtime stock and limits for a shop.
+- Inspect and mutate stock for direct shop items.
+- Inspect the latest transactions recorded for a player.
+
 ---
 
 ## ⚙️ Configuration
@@ -48,7 +55,7 @@ Shops Extension configuration is managed via TypeWriter's manifest system.
 
 ## 🛠 Building & Deployment
 
-Requires **Java 21**.
+Requires **Java 25**.
 
 ```bash
 # Clone the repository
@@ -60,7 +67,21 @@ cd AdvancedShopsExtension
 ```
 
 ### Artifact Locations:
-- `build/libs/Shops-[Version].jar`
+- `build/libs/TypeWriter-ShopsExtension-[Version].jar`
+
+## Commands & Permissions
+
+| Command | Permission | Description |
+|---|---|---|
+| `/tw shop <id>` | `typewriter.shop.open` | Open a shop. Available to players by default. |
+| `/tw shop admin` | `typewriter.shop.admin` | Show operator tools. OP-only by default. |
+| `/tw shop admin list` | `typewriter.shop.admin` | List loaded shops. |
+| `/tw shop admin info <shop>` | `typewriter.shop.admin` | Inspect shop and direct-item indexes. |
+| `/tw shop admin open <shop> [target]` | `typewriter.shop.admin` | Open a shop for a player or selector target. |
+| `/tw shop admin refresh|close [target]` | `typewriter.shop.admin` | Manage an open shop session. |
+| `/tw shop admin reset <shop>` | `typewriter.shop.admin` | Reset runtime stock and limits. |
+| `/tw shop admin stock <shop> <item> get|set|add|remove [amount]` | `typewriter.shop.admin` | Manage direct-item stock. |
+| `/tw shop admin history [target]` | `typewriter.shop.admin` | Show the latest runtime transactions. |
 
 ---
 
