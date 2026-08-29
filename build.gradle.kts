@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     kotlin("jvm") version "2.3.20"
     id("com.typewritermc.module-plugin") version "2.1.0"
 }
@@ -24,7 +24,7 @@ dependencies {
 }
 
 group = "btc.renaud"
-version = "1.6"
+version = "1.7"
 
 typewriter {
     namespace = "btcrenaud"

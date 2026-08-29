@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7 - 2026-08-29
+
+- Rebuilt against OmniGUI (GuiAndDialogs) v0.14.
+
 ## 1.6 — 2026-08-24
 
 - Added the operator command tree `/tw shop admin` with shop listing, definition inspection,
