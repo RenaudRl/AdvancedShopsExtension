@@ -1,7 +1,9 @@
 plugins {
-    kotlin("jvm") version "2.3.20"
-    id("com.typewritermc.module-plugin") version "2.1.0"
+    kotlin("jvm") version "2.2.10"
+    id("com.typewritermc.module-plugin") version "2.2.0"
 }
+
+val omniGuiVersion = "0.15"
 
 repositories {
     mavenCentral()
@@ -11,6 +13,16 @@ repositories {
     maven("https://maven.typewritermc.com/beta/")
     maven("https://maven.typewritermc.com/external")
     maven("https://jitpack.io")
+    ivy {
+        name = "omniGuiGitHubReleases"
+        url = uri("https://github.com/RenaudRl/Typewriter-OmniGUIExtension/releases/download")
+        patternLayout {
+            artifact("[revision]/Typewriter-OmniGUIExtension-$omniGuiVersion.[ext]")
+        }
+        metadataSources {
+            artifact()
+        }
+    }
 }
 
 dependencies {
@@ -19,12 +31,12 @@ dependencies {
     // compileOnly("io.papermc.paper:paper-api:1.21.4-...") here was stale and redundant with that.
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") { isTransitive = false }
     compileOnly("me.clip:placeholderapi:2.11.6")
-    compileOnly(project(":Typewriter-OmniGUIExtension"))
+    compileOnly("btcrenaud:Typewriter-OmniGUIExtension:v$omniGuiVersion@jar")
     testImplementation(kotlin("test"))
 }
 
 group = "btc.renaud"
-version = "1.7"
+version = "1.8"
 
 typewriter {
     namespace = "btcrenaud"
@@ -38,7 +50,7 @@ typewriter {
             buy/sell toggles per item, configurable refresh rates, promotions, price trends,
             transaction history, categories, and persistent storage via artifact.
         """.trimIndent()
-        engineVersion = "0.9.0-beta-175"
+        engineVersion = "0.9.0-beta-176"
         channel = com.typewritermc.moduleplugin.ReleaseChannel.BETA
         paper()
 
@@ -49,6 +61,6 @@ typewriter {
 }
 
 kotlin {
-    jvmToolchain(25)
+    jvmToolchain(21)
 }
 
