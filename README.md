@@ -1,6 +1,6 @@
 # Shops Extension
 
-![Java Version](https://img.shields.io/badge/Java-25-orange)
+![Java Version](https://img.shields.io/badge/Java-21-orange)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Target](https://img.shields.io/badge/Target-Paper%20/%20Folia%20/%20BTC--CORE-blue)
 
@@ -55,7 +55,7 @@ Shops Extension configuration is managed via TypeWriter's manifest system.
 
 ## 🛠 Building & Deployment
 
-Requires **Java 25**.
+Requires **Java 21**.
 
 ```bash
 # Clone the repository

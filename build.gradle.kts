@@ -3,7 +3,7 @@ plugins {
     id("com.typewritermc.module-plugin") version "2.2.0"
 }
 
-val omniGuiVersion = "0.15"
+val omniGuiVersion = "0.16"
 
 repositories {
     mavenCentral()
@@ -36,7 +36,7 @@ dependencies {
 }
 
 group = "btc.renaud"
-version = "1.8"
+version = "1.9"
 
 typewriter {
     namespace = "btcrenaud"
@@ -50,7 +50,7 @@ typewriter {
             buy/sell toggles per item, configurable refresh rates, promotions, price trends,
             transaction history, categories, and persistent storage via artifact.
         """.trimIndent()
-        engineVersion = "0.9.0-beta-176"
+        engineVersion = "0.9.0-beta-177"
         channel = com.typewritermc.moduleplugin.ReleaseChannel.BETA
         paper()
 
