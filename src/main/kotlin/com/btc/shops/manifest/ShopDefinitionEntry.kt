@@ -36,7 +36,7 @@ class ShopDefinitionEntry(
     val rows: Int = 6,
     @Help("Item used to fill empty slots.")
     val fillerItem: Var<Item> = ConstVar(Item.Empty),
-    @Help("Lore lines appended to each item to display prices. Placeholders: {buy}, {sell}. Supports color codes and placeholders.")
+    @Help("Lore lines appended to each item to display prices. Tokens: {buy}, {sell}, {item_price} (one line per requested item, for priceMode ITEMS). A line asking for an unavailable price is dropped. Supports color codes and placeholders.")
     val priceLore: List<String> = listOf("<yellow>Buy: {buy}", "<red>Sell: {sell}"),
 
     @Help("Economy provider used for pricing.")
@@ -47,6 +47,17 @@ class ShopDefinitionEntry(
     val addCommand: String = "",
     @Help("Command to remove currency. {player} and {amount} will be replaced.")
     val removeCommand: String = "",
+
+    @Help(
+        "Price in items applied to articles in priceMode ITEMS that declare none of their own. " +
+            "Leave empty when every such article carries its own itemPrice."
+    )
+    val defaultItemPrice: List<ItemCost> = emptyList(),
+    @Help(
+        "Message sent when the player lacks the requested items. {missing} is replaced by the " +
+            "list of what is missing, {amount} by the quantity bought."
+    )
+    val cannotAffordItemsMessage: String = "<red>You are missing: {missing}",
 
     @Help("Tax percentage applied on transactions (0.0 = no tax, 10.0 = 10% tax).")
     val taxRate: Double = 0.0,

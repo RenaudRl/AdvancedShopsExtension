@@ -37,7 +37,8 @@ class ShopTransactionHandler(
     private val promotionService: PromotionService,
     private val priceTrendService: PriceTrendService,
     private val transactionLogService: TransactionLogService,
-    private val shopGuiService: ShopGuiService
+    private val shopGuiService: ShopGuiService,
+    private val itemPriceService: ItemPriceService,
 ) {
     private val miniMessage = MiniMessage.miniMessage()
 
@@ -72,6 +73,16 @@ class ShopTransactionHandler(
 
     private fun String.toComponent() = miniMessage.deserialize(this)
     private fun formatPrice(value: Double): String = String.format("%.2f", value)
+
+    /** Refuses the transaction: tells the player why and plays the denied sound. */
+    private fun refuse(player: Player, definition: ShopDefinitionEntry, message: String) {
+        player.sendMessage(message.toComponent())
+        playSound(player, definition.deniedSound)
+    }
+
+    /** "3 × Kelp, 12 × Copper Ingot" — what a refusal names when items are missing. */
+    private fun describeMissing(missing: Map<String, Int>): String =
+        missing.entries.joinToString(", ") { "${it.value} × ${it.key}" }
 
     fun handleBuy(
         player: Player,
@@ -115,57 +126,101 @@ class ShopTransactionHandler(
             }
         }
 
-        val baseCost = calcBuyPrice(definition, cfg, amount)
-        val promotedCost = promotionService.getPromotedPrice(baseCost, definition.id, index)
-        val taxedCost = taxService.applyBuyTax(promotedCost, definition, cfg)
-
-        val economy = economyService.resolve(definition)
-        if (economy == null) {
-            player.sendMessage(definition.noEconomyMessage.toComponent())
-            playSound(player, definition.deniedSound)
-            return
-        }
-
-        // Two gates on purpose. `canAfford` is the one that produces the player-facing refusal,
-        // and `withdraw` re-checks internally so no economy adapter can ever settle a purchase
-        // that leaves the player below zero.
-        if (!economy.canAfford(player.uniqueId, taxedCost) ||
-            !economy.withdraw(player.uniqueId, taxedCost)
-        ) {
-            player.sendMessage(
-                definition.cannotAffordMessage.replace("{amount}", amount.toString())
-                    .replace("{price}", formatPrice(taxedCost)).toComponent()
-            )
-            playSound(player, definition.deniedSound)
-            return
-        }
-
-        // ATOMIC: Check inventory space BEFORE giving items
+        // The sold item is built BEFORE payment: both payment paths need to know whether the
+        // player can receive it, and a payment taken in front of a full inventory must be refunded
+        // — or, for a barter, never happen at all.
         val item = cfg.item.get(player).build(player).clone()
         val totalAmount = amount
         val maxStack = item.maxStackSize
-        val fullStacks = totalAmount / maxStack
-        val remainder = totalAmount % maxStack
 
-        // Check if player can receive all items
         val availableSpace = player.inventory.contents.filterNotNull().sumOf { slot ->
             if (slot.type == Material.AIR || slot.type.isAir) maxStack
             else if (slot.isSimilar(item)) maxStack - slot.amount
             else 0
         }
-        // Also count empty slots
         val emptySlots = player.inventory.contents.count { it == null || it.type == Material.AIR || it.type.isAir }
         val totalAvailable = availableSpace + emptySlots * maxStack
 
-        if (totalAvailable < totalAmount) {
-            // Refund
-            economy.deposit(player.uniqueId, taxedCost)
-            player.sendMessage(
-                definition.inventoryFullMessage.replace("{amount}", amount.toString())
-                    .replace("{price}", formatPrice(taxedCost)).toComponent()
-            )
-            playSound(player, definition.deniedSound)
-            return
+        // A price paid in ITEMS does not go through `Economy`, and cannot: that abstraction deals
+        // in a balance (`Double`), whereas a barter asks for "12 ingots and 3 kelp". Not an
+        // implementation limit, a different shape. See `ItemPriceRule`.
+        val itemPrice = itemPriceService.applicablePrice(definition, cfg)
+        val taxedCost: Double
+
+        if (itemPrice != null) {
+            when (val verdict = itemPriceService.evaluate(player, itemPrice, amount)) {
+                is ItemPriceService.Verdict.Invalid -> {
+                    // Neither a sale nor a refusal addressed to the player: a configuration
+                    // mistake. Log it, and above all do NOT deliver — an empty price is not a
+                    // zero price.
+                    logger.warning(
+                        "Shop '${definition.id}', item ${index + 1}: unusable price in items " +
+                            "(${verdict.reason}). The item is not sold."
+                    )
+                    return refuse(player, definition, definition.noEconomyMessage)
+                }
+
+                is ItemPriceService.Verdict.Missing -> {
+                    return refuse(
+                        player,
+                        definition,
+                        definition.cannotAffordItemsMessage
+                            .replace("{missing}", describeMissing(verdict.missing))
+                            .replace("{amount}", amount.toString()),
+                    )
+                }
+
+                is ItemPriceService.Verdict.Payable -> {
+                    // Space is checked BEFORE the withdrawal: a barter has no clean refund —
+                    // giving items back needs room, precisely what is missing. Nothing is taken
+                    // until delivery is possible.
+                    if (totalAvailable < totalAmount) {
+                        return refuse(
+                            player,
+                            definition,
+                            definition.inventoryFullMessage.replace("{amount}", amount.toString())
+                                .replace("{price}", "—"),
+                        )
+                    }
+                    // Nothing between the evaluation and the withdrawal yields: the plan names
+                    // slots by index, and an inventory changed in between would have something
+                    // else removed.
+                    itemPriceService.withdraw(player, verdict.withdrawals)
+                    taxedCost = 0.0
+                }
+            }
+        } else {
+            val baseCost = calcBuyPrice(definition, cfg, amount)
+            val promotedCost = promotionService.getPromotedPrice(baseCost, definition.id, index)
+            taxedCost = taxService.applyBuyTax(promotedCost, definition, cfg)
+
+            val economy = economyService.resolve(definition)
+                ?: return refuse(player, definition, definition.noEconomyMessage)
+
+            // Two gates on purpose. `canAfford` is the one that produces the player-facing refusal,
+            // and `withdraw` re-checks internally so no economy adapter can ever settle a purchase
+            // that leaves the player below zero.
+            if (!economy.canAfford(player.uniqueId, taxedCost) ||
+                !economy.withdraw(player.uniqueId, taxedCost)
+            ) {
+                return refuse(
+                    player,
+                    definition,
+                    definition.cannotAffordMessage.replace("{amount}", amount.toString())
+                        .replace("{price}", formatPrice(taxedCost)),
+                )
+            }
+
+            if (totalAvailable < totalAmount) {
+                // Refund
+                economy.deposit(player.uniqueId, taxedCost)
+                return refuse(
+                    player,
+                    definition,
+                    definition.inventoryFullMessage.replace("{amount}", amount.toString())
+                        .replace("{price}", formatPrice(taxedCost)),
+                )
+            }
         }
 
         // Give items
@@ -299,31 +354,46 @@ class ShopTransactionHandler(
         if (!cfg.buyEnabled || !cfg.buyMaxEnabled) return
         val index = definition.items.indexOf(cfg)
 
-        val economy = economyService.resolve(definition) ?: return
-        val unitPrice = when (cfg.priceMode) {
-            PriceMode.FIXED -> cfg.fixedBuyPrice
-            PriceMode.DYNAMIC -> {
-                val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
-                priceService.calculateBuyPrice(stock, cfg.dynamicPricing)
-            }
-        }
-
-        if (unitPrice <= 0.0) return
-
-        // An unreadable balance buys nothing: `handleBuy` would refuse anyway, but reporting it
-        // here keeps "buy max" from silently doing nothing at all.
-        val balance = economy.balanceOrNull(player.uniqueId)
-        if (balance == null) {
-            player.sendMessage(definition.cannotAffordMessage.toComponent())
-            playSound(player, definition.deniedSound)
-            return
-        }
-        val taxRate = if (definition.taxRate > 0) (1.0 + definition.taxRate / 100.0) else 1.0
-        val maxByBalance = (balance / (unitPrice * taxRate)).toInt()
-
         val template = cfg.item.get(player).build(player).clone()
         template.amount = 1
         val maxStack = template.maxStackSize
+
+        val itemPrice = itemPriceService.applicablePrice(definition, cfg)
+        val taxRate = if (definition.taxRate > 0) (1.0 + definition.taxRate / 100.0) else 1.0
+        val unitPrice: Double
+        val maxByBalance: Int
+
+        if (itemPrice != null) {
+            unitPrice = 0.0
+            // The ceiling is what an inventory can hold anyway: searching beyond it would make
+            // the bisection work on quantities no pocket could receive.
+            maxByBalance = itemPriceService.maxAffordableUnits(
+                player,
+                itemPrice,
+                ceiling = player.inventory.contents.size * maxStack,
+            )
+        } else {
+            val economy = economyService.resolve(definition) ?: return
+            unitPrice = when (cfg.priceMode) {
+                PriceMode.FIXED -> cfg.fixedBuyPrice
+                PriceMode.DYNAMIC -> {
+                    val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
+                    priceService.calculateBuyPrice(stock, cfg.dynamicPricing)
+                }
+                // Unreachable: `applicablePrice` already claimed ITEMS. The branch exists so the
+                // `when` stays exhaustive and a future mode cannot slip through unnoticed.
+                PriceMode.ITEMS -> 0.0
+            }
+
+            if (unitPrice <= 0.0) return
+
+            // An unreadable balance buys nothing: `handleBuy` would refuse anyway, but reporting it
+            // here keeps "buy max" from silently doing nothing at all.
+            val balance = economy.balanceOrNull(player.uniqueId)
+                ?: return refuse(player, definition, definition.cannotAffordMessage)
+            maxByBalance = (balance / (unitPrice * taxRate)).toInt()
+        }
+
         val emptySlots = player.inventory.contents.count { it == null || it.type == Material.AIR || it.type.isAir }
         val maxByInventory = emptySlots * maxStack
 
@@ -343,15 +413,27 @@ class ShopTransactionHandler(
         val maxAmount = minOf(maxByBalance, maxByInventory, maxByLimits)
         if (maxAmount <= 0) {
             val message =
-                if (maxByBalance <= 0) definition.cannotAffordMessage
-                else if (maxByInventory <= 0) definition.inventoryFullMessage
+                if (maxByBalance <= 0) {
+                    // On a barter, "you cannot afford this" says nothing: the list of missing
+                    // items is what informs. The refusal borrows the items message.
+                    if (itemPrice != null) {
+                        val missing = (itemPriceService.evaluate(player, itemPrice, 1)
+                            as? ItemPriceService.Verdict.Missing)
+                            ?.missing
+                            ?.let(::describeMissing)
+                            ?: "—"
+                        definition.cannotAffordItemsMessage.replace("{missing}", missing)
+                    } else {
+                        definition.cannotAffordMessage
+                    }
+                } else if (maxByInventory <= 0) definition.inventoryFullMessage
                 else definition.limitReachedMessage
-            player.sendMessage(
+            return refuse(
+                player,
+                definition,
                 message.replace("{amount}", "1")
-                    .replace("{price}", formatPrice(unitPrice * taxRate)).toComponent()
+                    .replace("{price}", formatPrice(unitPrice * taxRate)),
             )
-            playSound(player, definition.deniedSound)
-            return
         }
         handleBuy(player, cfg, definition, maxAmount)
     }
@@ -399,6 +481,9 @@ class ShopTransactionHandler(
                 val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
                 priceService.calculateBuyPrice(stock, cfg.dynamicPricing) * amount
             }
+            // A barter's scalar price is zero by construction: payment is settled in items before
+            // this value serves anything. It only survives for the transaction log.
+            PriceMode.ITEMS -> 0.0
         }
     }
 
@@ -410,6 +495,9 @@ class ShopTransactionHandler(
                 val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
                 priceService.calculateSellPrice(stock, cfg.dynamicPricing) * amount
             }
+            // Zero makes `handleSell` refuse, and that is the intended effect: an item bought with
+            // resources is not sold back for coins.
+            PriceMode.ITEMS -> 0.0
         }
     }
 

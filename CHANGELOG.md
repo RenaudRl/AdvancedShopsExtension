@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.10 — 2026-09-14
+
+### Barter — prices paid in items
+
+- Added `priceMode: ITEMS`. An article is sold against one or several items instead of currency:
+  `itemPrice` on the item lists what it costs (an `ItemCost` = item + quantity per unit bought),
+  `defaultItemPrice` on the shop covers every `ITEMS` article that declares none. The article's
+  list replaces the shop's, it is never added to it.
+- An `ITEMS` article with no price anywhere is refused and logged, never given away: an empty
+  price is not a zero price.
+- Payment is simulated on the whole inventory before anything is removed — two price lines
+  targeting the same stacks cannot both claim it — and the bought item's space is checked before
+  the withdrawal, since a barter has no refund. Catalogue items are matched by identity.
+- Added `cannotAffordItemsMessage` (`{missing}`, `{amount}`) and the `{item_price}` lore token,
+  one dash-prefixed line per requested item. `{buy}`/`{sell}` lines are dropped on such an
+  article; `buy_price`/`sell_price` placeholders read `—`. "Buy max" works on barter articles.
+- An `ITEMS` article cannot be sold back for currency: its sell price is zero.
+- Rebuilt against OmniGUI v0.17.
+
 ## 1.7 - 2026-08-29
 
 - Rebuilt against OmniGUI (GuiAndDialogs) v0.14.

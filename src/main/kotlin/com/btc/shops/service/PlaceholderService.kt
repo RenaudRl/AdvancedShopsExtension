@@ -62,10 +62,14 @@ class PlaceholderService(
             "buy_price" -> when (config.priceMode) {
                 PriceMode.FIXED -> config.fixedBuyPrice.toString()
                 PriceMode.DYNAMIC -> priceService.calculateBuyPrice(stock, config.dynamicPricing).toString()
+                // A price paid in items has no number. A dash rather than "0", which would read
+                // as free; the real price is shown by the `{item_price}` lore token.
+                PriceMode.ITEMS -> "—"
             }
             "sell_price" -> when (config.priceMode) {
                 PriceMode.FIXED -> config.fixedSellPrice.toString()
                 PriceMode.DYNAMIC -> priceService.calculateSellPrice(stock, config.dynamicPricing).toString()
+                PriceMode.ITEMS -> "—"
             }
             "stock" -> stock.toString()
             "stock_max" -> config.dynamicPricing.stockMax.toString()

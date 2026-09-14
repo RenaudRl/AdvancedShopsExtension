@@ -25,6 +25,10 @@ class PriceService {
         return when (cfg.priceMode) {
             PriceMode.FIXED -> cfg.fixedBuyPrice
             PriceMode.DYNAMIC -> calculateBuyPrice(stock, cfg.dynamicPricing)
+            // An article paid in items has no scalar price. Zero here is a display and log value,
+            // never a permission: payment is decided by `ItemPriceService`, on a path that does
+            // not consult `Economy` at all.
+            PriceMode.ITEMS -> 0.0
         }
     }
 
@@ -33,6 +37,10 @@ class PriceService {
         return when (cfg.priceMode) {
             PriceMode.FIXED -> cfg.fixedSellPrice
             PriceMode.DYNAMIC -> calculateSellPrice(stock, cfg.dynamicPricing)
+            // Zero, deliberately: `handleSell` refuses any sale whose reward is zero, so a barter
+            // article cannot be sold back for currency. Anything else would pay coins for an item
+            // bought with resources.
+            PriceMode.ITEMS -> 0.0
         }
     }
 }

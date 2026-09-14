@@ -27,8 +27,14 @@ data class ShopItemConfig(
     @Help("Whether players can sell this item.")
     val sellEnabled: Boolean = true,
 
-    @Help("How the price is determined: FIXED or DYNAMIC.")
+    @Help("How the price is determined: FIXED, DYNAMIC or ITEMS.")
     val priceMode: PriceMode = PriceMode.DYNAMIC,
+
+    @Help(
+        "Price paid in items for THIS article. When set it replaces the shop's defaultItemPrice; " +
+            "when empty the shop provides its own. Only used when priceMode is ITEMS."
+    )
+    val itemPrice: List<ItemCost> = emptyList(),
 
     @Help("Fixed buy price per unit. Only used when priceMode is FIXED.")
     val fixedBuyPrice: Double = 0.0,

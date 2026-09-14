@@ -12,6 +12,9 @@
 
 ### 🛒 Dynamic Marketplace
 - **Dynamic & Fixed Pricing**: Prices that fluctuate based on supply and demand, or stay fixed.
+- **Barter (items for items)**: `priceMode: ITEMS` sells an article against one or several
+  items instead of currency — "1 enchanted book for 12 copper ingots and 3 kelp". See
+  [Prices paid in items](#-prices-paid-in-items).
 - **Categories & Item Pools**: Organize offers into categories, with randomized item pools.
 
 ### 📦 Stock & Limits
@@ -22,8 +25,28 @@
 ### 🏷️ Display Formats
 - **Shop-wide defaults**: `defaultNameFormat` / `defaultLoreFormat` apply to every item that
   declares no name or lore of its own. An item that declares one keeps it untouched.
-- **Tokens**: `{item}`, `{buy}`, `{sell}`, `{stock}`, `{stock_max}`, `{currency}`. A lore line
-  asking for an unavailable price is dropped instead of rendering empty.
+- **Tokens**: `{item}`, `{buy}`, `{sell}`, `{stock}`, `{stock_max}`, `{currency}`,
+  `{item_price}`. A lore line asking for an unavailable price is dropped instead of rendering
+  empty.
+
+### 🔁 Prices paid in items
+- Set `priceMode: ITEMS` on an item and list what it costs in `itemPrice` — each `ItemCost` is
+  an item plus a quantity **per unit bought**. Several lines mean several items are required at
+  once; several units multiply every line.
+- `defaultItemPrice` on the shop applies to every `ITEMS` article that declares no `itemPrice`.
+  An article's own list **replaces** the shop's, it is never added to it.
+- An `ITEMS` article with no price anywhere is a configuration mistake, not a free article: the
+  purchase is refused, the reason is logged, nothing is delivered.
+- The player pays with what the inventory holds; a catalogue item is matched by its identity,
+  not only by its material. What is missing is computed **before** anything is removed, so a
+  refused purchase never consumes part of the price. Space for the bought item is checked before
+  the withdrawal too: a barter has no refund.
+- Refusals use `cannotAffordItemsMessage` with `{missing}` ("3 × Kelp, 12 × Copper Ingot") and
+  `{amount}`. "Buy max" buys as many units as the inventory can pay for.
+- Show the price with the `{item_price}` token: one line per requested item, `- 12 × Copper
+  Ingot`. `{buy}` and `{sell}` lines are dropped on such an article, and the `buy_price` /
+  `sell_price` placeholders read `—`.
+- An `ITEMS` article cannot be sold back for currency: its sell price is zero.
 
 ### 🔔 Transaction Events
 - **`ShopTransactionEvent`**: fired once a purchase or a sale has completed. Other extensions —

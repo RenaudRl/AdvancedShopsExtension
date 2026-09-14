@@ -32,7 +32,8 @@ class ShopGuiService(
     private val priceService: PriceService,
     private val stockService: StockService,
     private val resetService: ResetService,
-    private val shopPoolService: ShopPoolService
+    private val shopPoolService: ShopPoolService,
+    private val itemPriceService: ItemPriceService,
 ) {
 
     private val miniMessage = MiniMessage.miniMessage()
@@ -519,9 +520,9 @@ class ShopGuiService(
     /**
      * Substitutes a shop's format tokens on a raw line.
      *
-     * `{buy}` / `{sell}` / `{stock}` / `{stock_max}` / `{currency}` / `{item}` are configuration
-     * tokens, not placeholders: they are replaced here, on the string, after the placeholder pass
-     * and before MiniMessage parsing.
+     * `{buy}` / `{sell}` / `{stock}` / `{stock_max}` / `{currency}` / `{item}` / `{item_price}`
+     * are configuration tokens, not placeholders: they are replaced here, on the string, after
+     * the placeholder pass and before MiniMessage parsing.
      *
      * @param baseName the item's own display name, for `{item}`.
      * @return the substituted line, or `null` when it asks for an unavailable price — a
@@ -529,11 +530,20 @@ class ShopGuiService(
      */
     private fun expandItemTokens(
         template: String,
+        player: Player,
         cfg: ShopItemConfig,
         definition: ShopDefinitionEntry,
         baseName: String,
     ): String? {
         var out = template
+        if (out.contains("{item_price}")) {
+            // A line asking for the price in items disappears on an article that has none, instead
+            // of rendering empty — same rule as `{buy}` on an unbuyable article. A misconfigured
+            // price disappears too: the fault is logged at purchase time, where it is refused.
+            val resolution = itemPriceService.applicablePrice(definition, cfg) ?: return null
+            val lines = (resolution as? ItemPriceRule.Resolution.Price<ItemCost>)?.lines ?: return null
+            out = out.replace("{item_price}", itemPriceService.describe(player, lines))
+        }
         if (out.contains("{buy}")) {
             if (!cfg.buyEnabled) return null
             val price = getBuyPrice(definition, cfg, 1)
@@ -573,17 +583,17 @@ class ShopGuiService(
         // format never overrides an item's own wording, it only fills the gap.
         val nameTemplate = cfg.name.ifBlank { definition.defaultNameFormat }
         if (nameTemplate.isNotEmpty()) {
-            expandItemTokens(applyPlaceholders(player, nameTemplate), cfg, definition, baseName)
+            expandItemTokens(applyPlaceholders(player, nameTemplate), player, cfg, definition, baseName)
                 ?.let { meta.displayName(it.toComponent()) }
         }
 
         val baseLore = meta.lore()?.toList() ?: emptyList()
         val loreTemplate = cfg.lore.ifEmpty { definition.defaultLoreFormat }
         val customLore = loreTemplate
-            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), cfg, definition, baseName) }
+            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), player, cfg, definition, baseName) }
             .flatMap { line -> line.split("\n").map { it.toComponent() } }
         val priceLore = definition.priceLore
-            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), cfg, definition, baseName) }
+            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), player, cfg, definition, baseName) }
             .flatMap { line -> line.split("\n").map { it.toComponent() } }
 
         val lore = baseLore + customLore + priceLore
@@ -621,6 +631,9 @@ class ShopGuiService(
                 val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
                 priceService.calculateBuyPrice(stock, cfg.dynamicPricing) * amount
             }
+            // Zero drops a `{buy}` line, which is the point: a barter shop is expected to use
+            // `{item_price}`, the token that says what is actually paid.
+            PriceMode.ITEMS -> 0.0
         }
     }
 
@@ -632,6 +645,7 @@ class ShopGuiService(
                 val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
                 priceService.calculateSellPrice(stock, cfg.dynamicPricing) * amount
             }
+            PriceMode.ITEMS -> 0.0
         }
     }
 }
