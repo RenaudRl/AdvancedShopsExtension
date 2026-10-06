@@ -15,6 +15,7 @@ import com.typewritermc.engine.paper.entry.entries.Var
 import com.typewritermc.engine.paper.utils.item.Item
 import com.typewritermc.engine.paper.utils.Sound
 import kotlinx.serialization.Contextual
+import java.util.UUID
 
 /**
  * Declarative definition of a shop and its items.
@@ -107,10 +108,10 @@ class ShopDefinitionEntry(
     @Help("Global sell limit across all items (all players combined). 0 = unlimited.")
     val globalSellLimit: Int = 0,
 
-    @Help("Default refresh rate in ticks for item displays. 20 = 1 second.")
+    @Help("How often, in ticks, the stock shown by an open shop is redrawn (20 = 1 second). Applies to items with a finite stock; an item's own refreshTicks replaces it. 0 = never redraw by itself. Very low values cost server time.")
     val defaultRefreshTicks: Int = 20,
 
-    @Help("If true, each player has their own independent shop state (stock, limits).")
+    @Help("If true, every player has their own stock of each item: a purchase only lowers the buyer's stock, and a reset refills everyone's. Limits keep their own scope (playerLimit per player, globalLimit and the global buy/sell limits shared).")
     val perPlayer: Boolean = false,
 
     @Help("Sound played on successful purchase.")
@@ -192,6 +193,13 @@ class ShopDefinitionEntry(
      * written before them.
      */
     val usesTabMode: Boolean get() = baseMenuId.isNotBlank()
+
+    /**
+     * Whose stock a trade by [playerId] reads and writes: that player's own when [perPlayer] is on,
+     * else the shared stock (null). Also null when no player is involved, as for a placeholder
+     * resolved without one.
+     */
+    fun stockOwnerFor(playerId: UUID?): UUID? = if (perPlayer) playerId else null
 
     /** Whether this entry has a sub-menu layout configured in [layoutPool]. */
     val hasSubMenu: Boolean get() = subMenuLayoutId.isNotBlank() && layoutPool.any { it.id == subMenuLayoutId }

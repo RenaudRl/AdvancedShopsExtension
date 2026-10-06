@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Fields that were in the panel but not read
+
+- `perPlayer` is a real per-player stock: each player trades against their own stock of an item,
+  and a reset (policy or `resetNow`) refills everyone's. Limits keep their scope (`playerLimit` per
+  player, `globalLimit` and the global buy/sell limits shared). The stock is stored in the shop
+  artifact like the shared one; nothing is synchronised between servers.
+- `defaultRefreshTicks` and the item `refreshTicks` redraw the stock shown by an open shop
+  periodically (items with a finite stock only; the item's value replaces the default, 0 = the
+  default, a default of 0 = never).
+- Item `guiSlot` pins the item at that slot (row by row inside the content area), on every page;
+  the other items keep flowing through the SHOP_ITEM markers around it. A slot outside the area
+  falls back to the markers.
+- Item `sellAllEnabled` is checked by sell all: when off, the action is refused with `cannotSellMessage`.
+- The shop opening and its buttons now apply the full reset (stocks and limits) when it is due,
+  instead of refilling the shared stock only.
+
 ## 1.10 — 2026-09-14
 
 ### Barter — prices paid in items

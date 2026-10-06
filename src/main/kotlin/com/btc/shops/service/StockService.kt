@@ -57,4 +57,9 @@ class StockService(
     fun reset(shopId: String, itemId: Int, max: Int, playerUuid: UUID? = null) {
         persistence.resetStock(shopId, itemId, max, playerUuid)
     }
+
+    /** Refills the own stock of every player of a per-player shop. */
+    fun resetPlayers(shopId: String) {
+        persistence.resetPlayerStocks(shopId)
+    }
 }

@@ -33,6 +33,8 @@ dependencies {
     compileOnly("me.clip:placeholderapi:2.11.6")
     compileOnly("btcrenaud:Typewriter-OmniGUIExtension:v$omniGuiVersion@jar")
     testImplementation(kotlin("test"))
+    // The artifact service builds its Gson when the class loads; the server provides it, tests do not.
+    testRuntimeOnly("com.google.code.gson:gson:2.11.0")
 }
 
 group = "btc.renaud"

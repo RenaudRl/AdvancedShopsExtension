@@ -33,7 +33,7 @@ class PlaceholderService(
         val rest = params.substring(second + 1)
         val colonIndex = rest.indexOf(':')
         return if (colonIndex != -1 && rest.substring(0, colonIndex).toIntOrNull() != null) {
-            handleItemPlaceholder(shop, rest.substring(0, colonIndex), rest.substring(colonIndex + 1))
+            handleItemPlaceholder(shop, player, rest.substring(0, colonIndex), rest.substring(colonIndex + 1))
         } else {
             handleShopPlaceholder(shop, rest)
         }
@@ -51,12 +51,15 @@ class PlaceholderService(
 
     private fun handleItemPlaceholder(
         shop: ShopDefinitionEntry,
+        player: Player?,
         itemIndexRaw: String,
         key: String
     ): String? {
         val index = itemIndexRaw.toIntOrNull() ?: return null
         val config = shop.items.getOrNull(index) ?: return null
-        val stock = stockService.getStock(shop.id, index, config.dynamicPricing.stockMax)
+        val stock = stockService.getStock(
+            shop.id, index, config.dynamicPricing.stockMax, shop.stockOwnerFor(player?.uniqueId),
+        )
 
         return when (key) {
             "buy_price" -> when (config.priceMode) {

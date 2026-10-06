@@ -33,6 +33,13 @@ class ShopPersistenceService(
         setStock(shopId, itemId, max, playerUuid)
     }
 
+    /** Refills every player's own stock of [shopId]: an absent key reads as the maximum. */
+    fun resetPlayerStocks(shopId: String) {
+        artifactPersistence.update { data ->
+            data.items.keys.removeIf { StockKeys.isPlayerStockOf(shopId, it) }
+        }
+    }
+
     // ── Player Limits ──
 
     fun getPlayerLimit(shopId: String, itemId: Int, playerUuid: UUID): Int {
@@ -120,9 +127,6 @@ class ShopPersistenceService(
         }
     }
 
-    // ── Helpers ──
-
-    private fun stockKey(shopId: String, itemId: Int, playerUuid: UUID?): String {
-        return if (playerUuid != null) "stock:$shopId:$itemId:$playerUuid" else "stock:$shopId:$itemId"
-    }
+    private fun stockKey(shopId: String, itemId: Int, playerUuid: UUID?): String =
+        StockKeys.of(shopId, itemId, playerUuid)
 }

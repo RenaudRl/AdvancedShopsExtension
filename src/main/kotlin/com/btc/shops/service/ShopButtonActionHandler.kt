@@ -30,7 +30,6 @@ class ShopButtonActionHandler(
     private val transactionHandler: ShopTransactionHandler,
     private val shopGuiService: ShopGuiService,
     private val resetService: ResetService,
-    private val stockService: StockService,
 ) {
 
     companion object {
@@ -66,11 +65,7 @@ class ShopButtonActionHandler(
                 return@Consumer
             }
 
-            if (resetService.shouldReset(definition)) {
-                definition.items.forEachIndexed { i, c ->
-                    stockService.reset(definition.id, i, c.dynamicPricing.stockMax)
-                }
-            }
+            resetService.resetIfDue(definition)
 
             // Navigation needs no item; item actions resolve one first.
             when (action) {

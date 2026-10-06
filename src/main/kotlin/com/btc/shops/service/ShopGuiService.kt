@@ -40,6 +40,9 @@ class ShopGuiService(
     private val openSessions = ConcurrentHashMap<UUID, ShopSession>()
 
     private companion object {
+        /** Columns of an inventory: the width of a standalone shop's content area. */
+        const val INVENTORY_COLUMNS = 9
+
         /** Marker button type identifying a slot that a shop item is placed into. */
         const val SHOP_ITEM_BUTTON_TYPE = "SHOP_ITEM"
 
@@ -98,11 +101,7 @@ class ShopGuiService(
                 return@Runnable
             }
 
-            if (resetService.shouldReset(definition)) {
-                definition.items.forEachIndexed { index, cfg ->
-                    stockService.reset(definition.id, index, cfg.dynamicPricing.stockMax)
-                }
-            }
+            resetService.resetIfDue(definition)
 
             openFromLayoutPool(player, definition, page, targetViewId, pushHistory)
         }
@@ -121,10 +120,8 @@ class ShopGuiService(
 
     fun navigateNext(player: Player) {
         val session = openSessions[player.uniqueId] ?: return
-        val effectiveItems = shopPoolService.resolveItems(session.definition)
-        val pageSize = countItemSlots(session.definition)
-        val maxPage = if (pageSize > 0) ((effectiveItems.size - 1) / pageSize).coerceAtLeast(0) else 0
-        val nextPage = (session.page + 1).coerceAtMost(maxPage)
+        val plan = planPage(session.definition, shopPoolService.resolveItems(session.definition))
+        val nextPage = (session.page + 1).coerceAtMost(plan.lastPage)
         if (nextPage != session.page) {
             open(player, session.definition, nextPage, delayTicks = 0L)
         }
@@ -170,27 +167,15 @@ class ShopGuiService(
         // chassis owns the size, `rows` only matters when the shop still opens on its own.
         val size = if (tabMode) InventorySize.SIZE_54 else standaloneSize
 
-        // 1. Extract SHOP_ITEM positions directly from raw layout data (no parse needed).
-        //    Repetition is expanded by GuiSlotBuilder so SHOP_ITEM markers spread exactly like
-        //    every other repeated item — a local copy of this maths used `gap + 1` as the step,
-        //    ignored `repeatY`, and gated on `count > 1`, which collapsed markers to a single
-        //    slot whenever the editor left `count` unset (serialized as 0).
-        data class SlotPos(val x: Int, val y: Int)
-        val itemPositions = mutableListOf<SlotPos>()
+        // 1. Where the items go: pinned items at their own slot, the others on the SHOP_ITEM
+        //    markers (see [planPage]). The markers themselves are removed from the layout below.
+        val plan = planPage(definition, effectiveItems)
 
         // A layout emptied of its markers is KEPT, empty. Dropping it made it unreachable in the
         // pool, and the chassis frame pointing at it then rendered nothing — a shop screen whose
         // whole grid is made of markers, or a still-empty tab, silently disappeared.
         val cleanedPool = definition.layoutPool.map { layoutData ->
-            val filteredItems = layoutData.items.filter { item ->
-                if (isShopItemMarker(item)) {
-                    GuiSlotBuilder.expandPositions(item).forEach { (px, py) ->
-                        itemPositions.add(SlotPos(px, py))
-                    }
-                    false // Remove from cleaned layout
-                } else true
-            }
-            layoutData.copy(items = filteredItems)
+            layoutData.copy(items = layoutData.items.filterNot(::isShopItemMarker))
         }
 
         // 2. Resolve the base layout — either the shop's own single layout (standalone), or the
@@ -247,40 +232,41 @@ class ShopGuiService(
         //    positions (and the filler below) must be shifted by contentX/contentY by hand.
         val offsetX = if (tabMode) definition.contentX else 0
         val offsetY = if (tabMode) definition.contentY else 0
-        val pageSize = itemPositions.size
-        val startIndex = page * pageSize
-        val pageItems = effectiveItems.drop(startIndex).take(pageSize)
         val dynamicSlots = mutableListOf<GuiSlot>()
 
-        // Marker positions that actually received a product this page. Positions beyond the
-        // product count stay free so the filler covers them — otherwise a shop with fewer
-        // products than marker slots renders holes where the leftover markers were.
+        // Cells that actually received a product this page. Markers beyond the product count
+        // stay free so the filler covers them — otherwise a shop with fewer products than marker
+        // slots renders holes where the leftover markers were.
         val usedPositions = mutableSetOf<Pair<Int, Int>>()
 
-        pageItems.forEachIndexed { i, cfg ->
-            if (i >= itemPositions.size) return@forEachIndexed
-            val local = itemPositions[i]
-            val pos = SlotPos(local.x + offsetX, local.y + offsetY)
-            usedPositions.add(pos.x to pos.y)
+        // Redraw period of each article whose stock is shown live; the menu redraws at the fastest.
+        val liveTicks = mutableListOf<Int>()
+
+        plan.itemsOnPage(page).forEach { (cfg, local) ->
+            val pos = local.x + offsetX to local.y + offsetY
+            usedPositions.add(pos)
 
             if (!cfg.criteria.matches(player)) {
                 val lockedStack = definition.lockedItem.get(player).build(player)
                 dynamicSlots.add(GuiSlot(
-                    x = pos.x, y = pos.y,
+                    x = pos.first, y = pos.second,
                     item = lockedStack,
                     allowPickup = false,
                 ))
-                return@forEachIndexed
+                return@forEach
             }
 
             val realItemIndex = effectiveItems.indexOf(cfg)
             val stack = buildShopItem(cfg, player, definition)
             val interactions = buildItemClickInteractions(cfg, definition, realItemIndex, player)
+            val refreshTicks = liveRefreshTicks(cfg, definition)
+            if (refreshTicks > 0) liveTicks.add(refreshTicks)
             dynamicSlots.add(GuiSlot(
-                x = pos.x, y = pos.y,
+                x = pos.first, y = pos.second,
                 item = stack,
                 allowPickup = false,
                 interactions = interactions,
+                itemProvider = if (refreshTicks > 0) liveItem(cfg, definition, refreshTicks, stack) else null,
             ))
         }
 
@@ -306,7 +292,7 @@ class ShopGuiService(
             if (tabMode) {
                 buildFillerSlots(player, definition, definition.contentColumns, definition.contentRows, offsetX, offsetY, occupied)
             } else {
-                buildFillerSlots(player, definition, 9, standaloneRows, 0, 0, occupied)
+                buildFillerSlots(player, definition, INVENTORY_COLUMNS, standaloneRows, 0, 0, occupied)
             }
         )
 
@@ -342,7 +328,47 @@ class ShopGuiService(
         }
 
         openSessions[player.uniqueId] = ShopSession(definition, page)
-        MenuSessionService.register(player, menuDef, pushHistory = if (tabMode) pushHistory else page == 0)
+        MenuSessionService.register(
+            player,
+            menuDef,
+            pushHistory = if (tabMode) pushHistory else page == 0,
+            // The engine redraws the open menu on the player's own scheduler, and stops with it.
+            autoRefreshTicks = RefreshRate.menuPeriodTicks(liveTicks) ?: 0L,
+        )
+    }
+
+    /**
+     * Ticks between two redraws of [cfg]'s display, 0 when it is never redrawn.
+     *
+     * Only an article with a finite stock can change while the shop is open; an unlimited one
+     * would be redrawn for nothing.
+     */
+    private fun liveRefreshTicks(cfg: ShopItemConfig, definition: ShopDefinitionEntry): Int =
+        if (cfg.dynamicPricing.stockMax <= 0) 0
+        else RefreshRate.effectiveTicks(cfg.refreshTicks, definition.defaultRefreshTicks)
+
+    /**
+     * Rebuilds [cfg]'s display on each menu redraw, at most once per [refreshTicks].
+     *
+     * The menu redraws at its fastest article's pace; an article with a slower period keeps its
+     * last display in between. [first] is the display already built for the first draw.
+     */
+    private fun liveItem(
+        cfg: ShopItemConfig,
+        definition: ShopDefinitionEntry,
+        refreshTicks: Int,
+        first: ItemStack,
+    ): (Player) -> ItemStack {
+        var shown = first
+        var drawnAt = System.currentTimeMillis()
+        return { viewer ->
+            val now = System.currentTimeMillis()
+            if (RefreshRate.isDue(refreshTicks, drawnAt, now)) {
+                shown = buildShopItem(cfg, viewer, definition)
+                drawnAt = now
+            }
+            shown.clone()
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -546,19 +572,19 @@ class ShopGuiService(
         }
         if (out.contains("{buy}")) {
             if (!cfg.buyEnabled) return null
-            val price = getBuyPrice(definition, cfg, 1)
+            val price = getBuyPrice(player, definition, cfg, 1)
             if (price <= 0) return null
             out = out.replace("{buy}", formatPrice(price, definition))
         }
         if (out.contains("{sell}")) {
             if (!cfg.sellEnabled) return null
-            val price = getSellPrice(definition, cfg, 1)
+            val price = getSellPrice(player, definition, cfg, 1)
             if (price <= 0) return null
             out = out.replace("{sell}", formatPrice(price, definition))
         }
         if (out.contains("{stock}") || out.contains("{stock_max}")) {
             val index = definition.items.indexOf(cfg)
-            val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
+            val stock = stockOf(player, definition, index, cfg)
             out = out
                 .replace("{stock_max}", cfg.dynamicPricing.stockMax.toString())
                 .replace("{stock}", stock.toString())
@@ -607,28 +633,37 @@ class ShopGuiService(
     // ──────────────────────────────────────────────
 
     /**
-     * Number of item slots one page holds. MUST use the same expansion as
-     * [openFromLayoutPool], otherwise paging drifts from what is actually rendered
-     * (summing raw `count` reported 0 slots whenever the editor left `count` unset).
+     * Where each of [items] goes, and how many pages that makes. The one place paging is decided:
+     * rendering and navigation both read it, so they cannot drift apart.
+     *
+     * The SHOP_ITEM markers are expanded exactly like every other repeated item — a local copy of
+     * this maths used `gap + 1` as the step, ignored `repeatY`, and gated on `count > 1`, which
+     * collapsed markers to a single slot whenever the editor left `count` unset (serialized as 0).
      */
-    private fun countItemSlots(definition: ShopDefinitionEntry): Int {
-        var count = 0
-        definition.layoutPool.forEach { layoutData ->
-            layoutData.items.forEach { item ->
-                if (isShopItemMarker(item)) {
-                    count += GuiSlotBuilder.expandPositions(item).size
-                }
-            }
-        }
-        return count
+    private fun planPage(
+        definition: ShopDefinitionEntry,
+        items: List<ShopItemConfig>,
+    ): ItemPlacement.PagePlan<ShopItemConfig> {
+        val markers = definition.layoutPool
+            .flatMap { it.items }
+            .filter(::isShopItemMarker)
+            .flatMap { GuiSlotBuilder.expandPositions(it) }
+            .map { (x, y) -> ItemPlacement.Cell(x, y) }
+        val columns = if (definition.usesTabMode) definition.contentColumns else INVENTORY_COLUMNS
+        val rows = if (definition.usesTabMode) definition.contentRows else definition.rows.coerceIn(1, 6)
+        return ItemPlacement.plan(items, ShopItemConfig::guiSlot, markers, columns, rows)
     }
 
-    private fun getBuyPrice(definition: ShopDefinitionEntry, cfg: ShopItemConfig, amount: Int): Double {
+    /** The stock [player] sees: their own in a per-player shop, the shared one otherwise. */
+    private fun stockOf(player: Player, definition: ShopDefinitionEntry, index: Int, cfg: ShopItemConfig): Int =
+        stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax, definition.stockOwnerFor(player.uniqueId))
+
+    private fun getBuyPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, amount: Int): Double {
         return when (cfg.priceMode) {
             PriceMode.FIXED -> cfg.fixedBuyPrice * amount
             PriceMode.DYNAMIC -> {
                 val index = definition.items.indexOf(cfg)
-                val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
+                val stock = stockOf(player, definition, index, cfg)
                 priceService.calculateBuyPrice(stock, cfg.dynamicPricing) * amount
             }
             // Zero drops a `{buy}` line, which is the point: a barter shop is expected to use
@@ -637,12 +672,12 @@ class ShopGuiService(
         }
     }
 
-    private fun getSellPrice(definition: ShopDefinitionEntry, cfg: ShopItemConfig, amount: Int): Double {
+    private fun getSellPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, amount: Int): Double {
         return when (cfg.priceMode) {
             PriceMode.FIXED -> cfg.fixedSellPrice * amount
             PriceMode.DYNAMIC -> {
                 val index = definition.items.indexOf(cfg)
-                val stock = stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax)
+                val stock = stockOf(player, definition, index, cfg)
                 priceService.calculateSellPrice(stock, cfg.dynamicPricing) * amount
             }
             PriceMode.ITEMS -> 0.0

@@ -56,15 +56,15 @@ data class ShopItemConfig(
     @Help("Maximum amount that can be purchased globally (all players combined) per reset cycle. 0 = unlimited.")
     val globalLimit: Int = 0,
 
-    @Help("Refresh ticks for this item's display. 0 uses the shop default.")
+    @Help("How often, in ticks, the stock of this item is redrawn while the shop is open. Only used when the item has a finite stock. 0 = the shop's defaultRefreshTicks.")
     val refreshTicks: Int = 0,
 
-    @Help("Fixed GUI slot for this item when fillMode is SLOT. -1 for auto-placement.")
+    @Help("Fixed slot for this item, counted row by row from 0 inside the shop's content area (9 columns wide, or contentColumns in tab mode). The item stays there on every page and leaves the SHOP_ITEM markers to the others. Keep the slot free of any other layout item. -1, or a slot outside the area = placed on the next free SHOP_ITEM marker.")
     val guiSlot: Int = -1,
 
     @Help("Whether buy max is enabled for this item.")
     val buyMaxEnabled: Boolean = true,
-    @Help("Whether sell all is enabled for this item.")
+    @Help("Whether the sell-all action is enabled for this item. When off, sell all is refused with the shop's cannotSellMessage; selling a chosen amount is unaffected.")
     val sellAllEnabled: Boolean = true,
 
     @Help("Per-item tax rate override (percentage). Set to -1 to use the shop's global taxRate. Only effective when shop taxMode is PER_ITEM.")

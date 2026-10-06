@@ -53,17 +53,27 @@ class ResetService(
         }
     }
 
+    /**
+     * Applies the reset policy if it is due, with the full reset (stocks and limits).
+     *
+     * The shop opening and its buttons call this rather than testing [shouldReset] themselves:
+     * [shouldReset] consumes the due date, so a caller that only refilled the shared stock after it
+     * left the limits and the players' own stocks untouched until the next cycle.
+     */
+    fun resetIfDue(definition: ShopDefinitionEntry) {
+        if (shouldReset(definition)) performReset(definition)
+    }
+
     private fun performReset(definition: ShopDefinitionEntry) {
         // Reset stocks (shared)
         definition.items.forEachIndexed { index, cfg ->
             stockService.reset(definition.id, index, cfg.dynamicPricing.stockMax)
         }
 
-        // Reset per-player stocks if perPlayer mode
+        // A per-player shop keeps one stock per player: dropping their keys refills them, since
+        // an absent key reads as the maximum.
         if (definition.perPlayer) {
-            // Per-player stocks are reset by clearing the persistence keys
-            // The getStock() will return max for any key not found
-            playerLimitService.reset(definition)
+            stockService.resetPlayers(definition.id)
         }
 
         // Reset player limits

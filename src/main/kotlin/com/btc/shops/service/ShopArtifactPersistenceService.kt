@@ -14,9 +14,11 @@ import java.util.concurrent.ConcurrentHashMap
  * Handles persistence for [ShopArtifact] via AssetManager.
  * Contains the cache and load/save logic that cannot live in the Entry itself
  * (KSP forbids stateful entries).
+ *
+ * Open so that tests can replace the storage with an in-memory one; production never subclasses it.
  */
 @Singleton
-class ShopArtifactPersistenceService {
+open class ShopArtifactPersistenceService {
 
     companion object {
         private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
@@ -38,7 +40,7 @@ class ShopArtifactPersistenceService {
     private val artifact: ShopArtifact
         get() = artifactOrNull ?: ShopArtifact("shop_artifact", "Shop Data")
 
-    fun load(): ShopArtifact.ShopArtifactData {
+    open fun load(): ShopArtifact.ShopArtifactData {
         val now = System.currentTimeMillis()
         if (cachedData != null && now - lastCacheTime < CACHE_DURATION_MS) {
             return cachedData!!
@@ -78,7 +80,7 @@ class ShopArtifactPersistenceService {
         lastCacheTime = System.currentTimeMillis()
     }
 
-    fun update(block: (ShopArtifact.ShopArtifactData) -> Unit) {
+    open fun update(block: (ShopArtifact.ShopArtifactData) -> Unit) {
         val data = load()
         block(data)
         save(data)
