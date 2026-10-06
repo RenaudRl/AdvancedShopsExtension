@@ -87,6 +87,7 @@ class ShopTransactionHandler(
     fun handleBuy(
         player: Player,
         cfg: ShopItemConfig,
+        index: Int,
         definition: ShopDefinitionEntry,
         amount: Int
     ) {
@@ -94,7 +95,6 @@ class ShopTransactionHandler(
             sendDenied(player, definition)
             return
         }
-        val index = definition.items.indexOf(cfg)
 
         // Check player limit
         if (cfg.playerLimit > 0) {
@@ -190,7 +190,7 @@ class ShopTransactionHandler(
                 }
             }
         } else {
-            val baseCost = calcBuyPrice(player, definition, cfg, amount)
+            val baseCost = calcBuyPrice(player, definition, cfg, index, amount)
             val promotedCost = promotionService.getPromotedPrice(baseCost, definition.id, index)
             taxedCost = taxService.applyBuyTax(promotedCost, definition, cfg)
 
@@ -260,6 +260,7 @@ class ShopTransactionHandler(
     fun handleSell(
         player: Player,
         cfg: ShopItemConfig,
+        index: Int,
         definition: ShopDefinitionEntry,
         amount: Int
     ) {
@@ -268,9 +269,8 @@ class ShopTransactionHandler(
             playSound(player, definition.deniedSound)
             return
         }
-        val index = definition.items.indexOf(cfg)
 
-        val baseReward = calcSellPrice(player, definition, cfg, amount)
+        val baseReward = calcSellPrice(player, definition, cfg, index, amount)
         if (baseReward <= 0.0) {
             player.sendMessage(
                 definition.cannotSellMessage.replace("{amount}", amount.toString())
@@ -332,6 +332,7 @@ class ShopTransactionHandler(
     fun handleSellAll(
         player: Player,
         cfg: ShopItemConfig,
+        index: Int,
         definition: ShopDefinitionEntry
     ) {
         if (!cfg.sellEnabled) return
@@ -344,16 +345,16 @@ class ShopTransactionHandler(
             playSound(player, definition.deniedSound)
             return
         }
-        handleSell(player, cfg, definition, allAmount)
+        handleSell(player, cfg, index, definition, allAmount)
     }
 
     fun handleBuyMax(
         player: Player,
         cfg: ShopItemConfig,
+        index: Int,
         definition: ShopDefinitionEntry
     ) {
         if (!cfg.buyEnabled || !cfg.buyMaxEnabled) return
-        val index = definition.items.indexOf(cfg)
 
         val template = cfg.item.get(player).build(player).clone()
         template.amount = 1
@@ -436,7 +437,7 @@ class ShopTransactionHandler(
                     .replace("{price}", formatPrice(unitPrice * taxRate)),
             )
         }
-        handleBuy(player, cfg, definition, maxAmount)
+        handleBuy(player, cfg, index, definition, maxAmount)
     }
 
     /** The stock [player] trades against: their own in a per-player shop, the shared one otherwise. */
@@ -478,12 +479,11 @@ class ShopTransactionHandler(
         }
     }
 
-    private fun calcBuyPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, amount: Int): Double {
+    private fun calcBuyPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, index: Int, amount: Int): Double {
         return when (cfg.priceMode) {
             PriceMode.FIXED -> cfg.fixedBuyPrice * amount
             PriceMode.DYNAMIC -> {
-                val index = definition.items.indexOf(cfg)
-                val stock = stockOf(player, definition, index, cfg)
+                        val stock = stockOf(player, definition, index, cfg)
                 priceService.calculateBuyPrice(stock, cfg.dynamicPricing) * amount
             }
             // A barter's scalar price is zero by construction: payment is settled in items before
@@ -492,12 +492,11 @@ class ShopTransactionHandler(
         }
     }
 
-    private fun calcSellPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, amount: Int): Double {
+    private fun calcSellPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, index: Int, amount: Int): Double {
         return when (cfg.priceMode) {
             PriceMode.FIXED -> cfg.fixedSellPrice * amount
             PriceMode.DYNAMIC -> {
-                val index = definition.items.indexOf(cfg)
-                val stock = stockOf(player, definition, index, cfg)
+                        val stock = stockOf(player, definition, index, cfg)
                 priceService.calculateSellPrice(stock, cfg.dynamicPricing) * amount
             }
             // Zero makes `handleSell` refuse, and that is the intended effect: an item bought with

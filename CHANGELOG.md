@@ -17,6 +17,11 @@
 - Item `guiSlot` pins the item at that slot (row by row inside the content area), on every page;
   the other items keep flowing through the SHOP_ITEM markers around it. A slot outside the area
   falls back to the markers.
+- Two identical articles no longer share one stock: an article's stock key is its position in the
+  shop (items, then pool), not an equality lookup. Keys already stored stay valid.
+- When pinned articles (`guiSlot`) hold every SHOP_ITEM marker, the remaining articles go on the
+  free cells of the content area, page after page, instead of vanishing; if nothing is free the
+  console logs a warning naming the shop and the article.
 - Item `sellAllEnabled` is checked by sell all: when off, the action is refused with `cannotSellMessage`.
 - The shop opening and its buttons now apply the full reset (stocks and limits) when it is due,
   instead of refilling the shared stock only.

@@ -19,6 +19,10 @@ object ItemPlacement {
         val pinned: List<Placed<T>>,
         private val flowing: List<T>,
         private val flowCells: List<Cell>,
+        /** Items that fit nowhere: no marker and no free cell. The caller must report them. */
+        val unplaced: List<T> = emptyList(),
+        /** True when the flowing items use the free cells of the area because no marker was left. */
+        val usedFreeCells: Boolean = false,
     ) {
         /** Number of flowing items one page holds. */
         val pageSize: Int get() = flowCells.size
@@ -67,6 +71,16 @@ object ItemPlacement {
             if (cell != null && taken.add(cell)) pinned += Placed(item, cell) else flowing += item
         }
 
-        return PagePlan(pinned, flowing, markers.filter { it !in taken })
+        val markerCells = markers.filter { it !in taken }
+        if (flowing.isEmpty() || markerCells.isNotEmpty()) return PagePlan(pinned, flowing, markerCells)
+
+        // Items still flow but no marker is left. When pinned items hold every marker, the flowing
+        // ones go on the free cells of the content area, page after page, instead of vanishing.
+        // A layout with no marker at all, or an area with no free cell, cannot show them: they are
+        // reported as [PagePlan.unplaced].
+        val freeCells = if (markers.isEmpty()) emptyList() else
+            (0 until rows).flatMap { y -> (0 until columns).map { x -> Cell(x, y) } }.filter { it !in taken }
+        return if (freeCells.isNotEmpty()) PagePlan(pinned, flowing, freeCells, usedFreeCells = true)
+        else PagePlan(pinned, emptyList(), emptyList(), unplaced = flowing)
     }
 }

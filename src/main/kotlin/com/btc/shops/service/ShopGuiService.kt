@@ -14,6 +14,7 @@ import com.typewritermc.core.extension.annotations.Singleton
 import com.typewritermc.core.interaction.context
 import com.typewritermc.engine.paper.entry.entries.get
 import com.typewritermc.engine.paper.entry.matches
+import com.typewritermc.engine.paper.logger
 import me.clip.placeholderapi.PlaceholderAPI
 import net.kyori.adventure.text.minimessage.MiniMessage
 import com.typewritermc.engine.paper.utils.item.Item
@@ -42,6 +43,7 @@ class ShopGuiService(
     private companion object {
         /** Columns of an inventory: the width of a standalone shop's content area. */
         const val INVENTORY_COLUMNS = 9
+        private const val MAX_REPORTED_PLACEMENTS = 256
 
         /** Marker button type identifying a slot that a shop item is placed into. */
         const val SHOP_ITEM_BUTTON_TYPE = "SHOP_ITEM"
@@ -170,6 +172,7 @@ class ShopGuiService(
         // 1. Where the items go: pinned items at their own slot, the others on the SHOP_ITEM
         //    markers (see [planPage]). The markers themselves are removed from the layout below.
         val plan = planPage(definition, effectiveItems)
+        reportPlacement(definition, plan)
 
         // A layout emptied of its markers is KEPT, empty. Dropping it made it unreachable in the
         // pool, and the chassis frame pointing at it then rendered nothing — a shop screen whose
@@ -243,7 +246,9 @@ class ShopGuiService(
         val watched = mutableListOf<StockWatch.Item>()
         val watchedConfigs = mutableMapOf<Int, ShopItemConfig>()
 
-        plan.itemsOnPage(page).forEach { (cfg, local) ->
+        plan.itemsOnPage(page).forEach { (indexed, local) ->
+            val cfg = indexed.value
+            val realItemIndex = indexed.index
             val pos = local.x + offsetX to local.y + offsetY
             usedPositions.add(pos)
 
@@ -257,8 +262,7 @@ class ShopGuiService(
                 return@forEach
             }
 
-            val realItemIndex = effectiveItems.indexOf(cfg)
-            val stack = buildShopItem(cfg, player, definition)
+            val stack = buildShopItem(cfg, realItemIndex, player, definition)
             val interactions = buildItemClickInteractions(cfg, definition, realItemIndex, player)
             val refreshTicks = liveRefreshTicks(cfg, definition)
             if (refreshTicks > 0) {
@@ -271,7 +275,7 @@ class ShopGuiService(
                 allowPickup = false,
                 interactions = interactions,
                 // Rebuilt on every redraw, which only happens when a watched stock has changed.
-                itemProvider = if (refreshTicks > 0) { viewer -> buildShopItem(cfg, viewer, definition) } else null,
+                itemProvider = if (refreshTicks > 0) { viewer -> buildShopItem(cfg, realItemIndex, viewer, definition) } else null,
             ))
         }
 
@@ -567,6 +571,7 @@ class ShopGuiService(
         template: String,
         player: Player,
         cfg: ShopItemConfig,
+        index: Int,
         definition: ShopDefinitionEntry,
         baseName: String,
     ): String? {
@@ -581,18 +586,17 @@ class ShopGuiService(
         }
         if (out.contains("{buy}")) {
             if (!cfg.buyEnabled) return null
-            val price = getBuyPrice(player, definition, cfg, 1)
+            val price = getBuyPrice(player, definition, cfg, index, 1)
             if (price <= 0) return null
             out = out.replace("{buy}", formatPrice(price, definition))
         }
         if (out.contains("{sell}")) {
             if (!cfg.sellEnabled) return null
-            val price = getSellPrice(player, definition, cfg, 1)
+            val price = getSellPrice(player, definition, cfg, index, 1)
             if (price <= 0) return null
             out = out.replace("{sell}", formatPrice(price, definition))
         }
         if (out.contains("{stock}") || out.contains("{stock_max}")) {
-            val index = definition.items.indexOf(cfg)
             val stock = stockOf(player, definition, index, cfg)
             out = out
                 .replace("{stock_max}", cfg.dynamicPricing.stockMax.toString())
@@ -609,7 +613,7 @@ class ShopGuiService(
             ?: stack.type.name.lowercase().split('_')
                 .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
 
-    private fun buildShopItem(cfg: ShopItemConfig, player: Player, definition: ShopDefinitionEntry): ItemStack {
+    private fun buildShopItem(cfg: ShopItemConfig, index: Int, player: Player, definition: ShopDefinitionEntry): ItemStack {
         val stack = cfg.item.get(player).build(player)
         val meta = stack.itemMeta ?: return stack
         val baseName = baseDisplayName(meta, stack)
@@ -618,17 +622,17 @@ class ShopGuiService(
         // format never overrides an item's own wording, it only fills the gap.
         val nameTemplate = cfg.name.ifBlank { definition.defaultNameFormat }
         if (nameTemplate.isNotEmpty()) {
-            expandItemTokens(applyPlaceholders(player, nameTemplate), player, cfg, definition, baseName)
+            expandItemTokens(applyPlaceholders(player, nameTemplate), player, cfg, index, definition, baseName)
                 ?.let { meta.displayName(it.toComponent()) }
         }
 
         val baseLore = meta.lore()?.toList() ?: emptyList()
         val loreTemplate = cfg.lore.ifEmpty { definition.defaultLoreFormat }
         val customLore = loreTemplate
-            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), player, cfg, definition, baseName) }
+            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), player, cfg, index, definition, baseName) }
             .flatMap { line -> line.split("\n").map { it.toComponent() } }
         val priceLore = definition.priceLore
-            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), player, cfg, definition, baseName) }
+            .mapNotNull { expandItemTokens(applyPlaceholders(player, it), player, cfg, index, definition, baseName) }
             .flatMap { line -> line.split("\n").map { it.toComponent() } }
 
         val lore = baseLore + customLore + priceLore
@@ -652,7 +656,7 @@ class ShopGuiService(
     private fun planPage(
         definition: ShopDefinitionEntry,
         items: List<ShopItemConfig>,
-    ): ItemPlacement.PagePlan<ShopItemConfig> {
+    ): ItemPlacement.PagePlan<IndexedValue<ShopItemConfig>> {
         val markers = definition.layoutPool
             .flatMap { it.items }
             .filter(::isShopItemMarker)
@@ -660,18 +664,44 @@ class ShopGuiService(
             .map { (x, y) -> ItemPlacement.Cell(x, y) }
         val columns = if (definition.usesTabMode) definition.contentColumns else INVENTORY_COLUMNS
         val rows = if (definition.usesTabMode) definition.contentRows else definition.rows.coerceIn(1, 6)
-        return ItemPlacement.plan(items, ShopItemConfig::guiSlot, markers, columns, rows)
+        // Each article travels with its position in [items]: that position is its stock key, so two
+        // identical articles stay two articles with two stocks.
+        return ItemPlacement.plan(items.withIndex().toList(), { it.value.guiSlot }, markers, columns, rows)
     }
+
+    /** Shops already reported, so a menu reopened often does not flood the console. */
+    private val reportedPlacements: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** Says so, once per shop, when articles are moved to free cells or cannot be shown at all. */
+    private fun reportPlacement(definition: ShopDefinitionEntry, plan: ItemPlacement.PagePlan<IndexedValue<ShopItemConfig>>) {
+        if (!plan.usedFreeCells && plan.unplaced.isEmpty()) return
+        if (reportedPlacements.size >= MAX_REPORTED_PLACEMENTS || !reportedPlacements.add(definition.id)) return
+        if (plan.unplaced.isNotEmpty()) {
+            val names = plan.unplaced.joinToString { "#${it.index} (${articleName(it.value)})" }
+            logger.warning(
+                "[Shops] Shop '${definition.id}': ${plan.unplaced.size} article(s) cannot be shown, " +
+                    "the layout has no free SHOP_ITEM marker and no free cell: $names. " +
+                    "Add SHOP_ITEM markers or free a slot."
+            )
+        } else {
+            logger.warning(
+                "[Shops] Shop '${definition.id}': every SHOP_ITEM marker is held by an article with a guiSlot, " +
+                    "the other articles are placed on the free cells of the content area instead."
+            )
+        }
+    }
+
+    private fun articleName(cfg: ShopItemConfig): String =
+        cfg.name.ifBlank { "unnamed article" }
 
     /** The stock [player] sees: their own in a per-player shop, the shared one otherwise. */
     private fun stockOf(player: Player, definition: ShopDefinitionEntry, index: Int, cfg: ShopItemConfig): Int =
         stockService.getStock(definition.id, index, cfg.dynamicPricing.stockMax, definition.stockOwnerFor(player.uniqueId))
 
-    private fun getBuyPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, amount: Int): Double {
+    private fun getBuyPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, index: Int, amount: Int): Double {
         return when (cfg.priceMode) {
             PriceMode.FIXED -> cfg.fixedBuyPrice * amount
             PriceMode.DYNAMIC -> {
-                val index = definition.items.indexOf(cfg)
                 val stock = stockOf(player, definition, index, cfg)
                 priceService.calculateBuyPrice(stock, cfg.dynamicPricing) * amount
             }
@@ -681,11 +711,10 @@ class ShopGuiService(
         }
     }
 
-    private fun getSellPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, amount: Int): Double {
+    private fun getSellPrice(player: Player, definition: ShopDefinitionEntry, cfg: ShopItemConfig, index: Int, amount: Int): Double {
         return when (cfg.priceMode) {
             PriceMode.FIXED -> cfg.fixedSellPrice * amount
             PriceMode.DYNAMIC -> {
-                val index = definition.items.indexOf(cfg)
                 val stock = stockOf(player, definition, index, cfg)
                 priceService.calculateSellPrice(stock, cfg.dynamicPricing) * amount
             }

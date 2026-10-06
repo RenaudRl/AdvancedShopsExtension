@@ -87,12 +87,12 @@ class ShopButtonActionHandler(
 
             val cfg = definition.items.getOrNull(itemIndex) ?: return@Consumer
             when (action) {
-                "buy" -> transactionHandler.handleBuy(player, cfg, definition, amount)
-                "sell" -> transactionHandler.handleSell(player, cfg, definition, amount)
-                "buystack" -> transactionHandler.handleBuy(player, cfg, definition, cfg.item.get(player).build(player).maxStackSize)
-                "sellstack" -> transactionHandler.handleSell(player, cfg, definition, cfg.item.get(player).build(player).maxStackSize)
-                "sellall" -> transactionHandler.handleSellAll(player, cfg, definition)
-                "buymax" -> transactionHandler.handleBuyMax(player, cfg, definition)
+                "buy" -> transactionHandler.handleBuy(player, cfg, itemIndex, definition, amount)
+                "sell" -> transactionHandler.handleSell(player, cfg, itemIndex, definition, amount)
+                "buystack" -> transactionHandler.handleBuy(player, cfg, itemIndex, definition, cfg.item.get(player).build(player).maxStackSize)
+                "sellstack" -> transactionHandler.handleSell(player, cfg, itemIndex, definition, cfg.item.get(player).build(player).maxStackSize)
+                "sellall" -> transactionHandler.handleSellAll(player, cfg, itemIndex, definition)
+                "buymax" -> transactionHandler.handleBuyMax(player, cfg, itemIndex, definition)
                 "submenu_buy" -> shopGuiService.openSubMenu(player, definition, cfg, itemIndex, buy = true)
                 "submenu_sell" -> shopGuiService.openSubMenu(player, definition, cfg, itemIndex, buy = false)
                 "amount_buy" -> promptAmount(player, definition, itemIndex, buy = true)
@@ -131,9 +131,9 @@ class ShopButtonActionHandler(
             }
             val cfg = definition.items.getOrNull(itemIndex) ?: return@openPaperDialogInput
             if (buy) {
-                transactionHandler.handleBuy(player, cfg, definition, amount)
+                transactionHandler.handleBuy(player, cfg, itemIndex, definition, amount)
             } else {
-                transactionHandler.handleSell(player, cfg, definition, amount)
+                transactionHandler.handleSell(player, cfg, itemIndex, definition, amount)
             }
             shopGuiService.refresh(player)
         }
