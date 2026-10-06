@@ -56,7 +56,7 @@ data class ShopItemConfig(
     @Help("Maximum amount that can be purchased globally (all players combined) per reset cycle. 0 = unlimited.")
     val globalLimit: Int = 0,
 
-    @Help("How often, in ticks, the stock of this item is redrawn while the shop is open. Only used when the item has a finite stock. 0 = the shop's defaultRefreshTicks.")
+    @Help("How often, in ticks, the shop checks whether the stock of this item has changed while it is open; the shop is redrawn only when it has. Only used when the item has a finite stock. 0 = the shop's defaultRefreshTicks.")
     val refreshTicks: Int = 0,
 
     @Help("Fixed slot for this item, counted row by row from 0 inside the shop's content area (9 columns wide, or contentColumns in tab mode). The item stays there on every page and leaves the SHOP_ITEM markers to the others. Keep the slot free of any other layout item. -1, or a slot outside the area = placed on the next free SHOP_ITEM marker.")

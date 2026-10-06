@@ -8,9 +8,12 @@
   and a reset (policy or `resetNow`) refills everyone's. Limits keep their scope (`playerLimit` per
   player, `globalLimit` and the global buy/sell limits shared). The stock is stored in the shop
   artifact like the shared one; nothing is synchronised between servers.
-- `defaultRefreshTicks` and the item `refreshTicks` redraw the stock shown by an open shop
-  periodically (items with a finite stock only; the item's value replaces the default, 0 = the
-  default, a default of 0 = never).
+- `defaultRefreshTicks` and the item `refreshTicks` set how often an open shop checks whether the
+  stock it shows has changed (items with a finite stock only; the item's value replaces the
+  default, 0 = the default, a default of 0 = never). The shop is redrawn only when a stock has
+  really changed, so a shop whose stocks do not move costs a few cached reads and no redraw.
+- The per-player stock stores only the gap to the initial stock: a stock back at its maximum has no
+  entry, and a reset drops every player's entries.
 - Item `guiSlot` pins the item at that slot (row by row inside the content area), on every page;
   the other items keep flowing through the SHOP_ITEM markers around it. A slot outside the area
   falls back to the markers.

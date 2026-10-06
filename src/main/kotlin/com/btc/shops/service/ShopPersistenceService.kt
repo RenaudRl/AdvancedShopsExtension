@@ -29,6 +29,13 @@ class ShopPersistenceService(
         }
     }
 
+    /** Forgets the stored stock of an item, so it reads as the maximum again. No write when nothing is stored. */
+    fun clearStock(shopId: String, itemId: Int, playerUuid: UUID? = null) {
+        val key = stockKey(shopId, itemId, playerUuid)
+        if (artifactPersistence.load().items[key]?.stock == null) return
+        artifactPersistence.update { data -> data.items.remove(key) }
+    }
+
     fun resetStock(shopId: String, itemId: Int, max: Int, playerUuid: UUID? = null) {
         setStock(shopId, itemId, max, playerUuid)
     }

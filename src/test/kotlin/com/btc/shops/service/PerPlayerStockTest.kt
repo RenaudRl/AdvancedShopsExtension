@@ -100,6 +100,39 @@ class PerPlayerStockTest {
     }
 
     @Test
+    fun `a stock back at its maximum is not stored any more`() {
+        stock.buy("shop", 0, 4, limited, alice)
+        assertEquals(1, artifact.load().items.size)
+
+        stock.sell("shop", 0, 4, limited, alice)
+
+        assertEquals(0, artifact.load().items.size)
+        assertEquals(10, stock.getStock("shop", 0, 10, alice))
+    }
+
+    @Test
+    fun `players who trade and come back to full leave nothing in the artifact`() {
+        repeat(50) { stock.buy("shop", 0, 1, limited, UUID.randomUUID()) }
+        assertEquals(50, artifact.load().items.size)
+
+        artifact.load().items.keys.toList().forEach { key ->
+            val uuid = UUID.fromString(key.substringAfterLast(':'))
+            stock.sell("shop", 0, 1, limited, uuid)
+        }
+
+        assertEquals(0, artifact.load().items.size)
+    }
+
+    @Test
+    fun `resetting a per-player shop drops every player's entry`() {
+        repeat(20) { stock.buy("shop", it % 3, 2, limited, UUID.randomUUID()) }
+
+        stock.resetPlayers("shop")
+
+        assertEquals(0, artifact.load().items.size)
+    }
+
+    @Test
     fun `the shared key and a player's key never collide`() {
         val shared = StockKeys.of("shop", 0, null)
         val own = StockKeys.of("shop", 0, alice)

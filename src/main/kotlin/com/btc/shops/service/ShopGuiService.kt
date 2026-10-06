@@ -239,8 +239,9 @@ class ShopGuiService(
         // slots renders holes where the leftover markers were.
         val usedPositions = mutableSetOf<Pair<Int, Int>>()
 
-        // Redraw period of each article whose stock is shown live; the menu redraws at the fastest.
-        val liveTicks = mutableListOf<Int>()
+        // Articles whose stock is shown live: the menu is redrawn only when one of them changes.
+        val watched = mutableListOf<StockWatch.Item>()
+        val watchedConfigs = mutableMapOf<Int, ShopItemConfig>()
 
         plan.itemsOnPage(page).forEach { (cfg, local) ->
             val pos = local.x + offsetX to local.y + offsetY
@@ -260,13 +261,17 @@ class ShopGuiService(
             val stack = buildShopItem(cfg, player, definition)
             val interactions = buildItemClickInteractions(cfg, definition, realItemIndex, player)
             val refreshTicks = liveRefreshTicks(cfg, definition)
-            if (refreshTicks > 0) liveTicks.add(refreshTicks)
+            if (refreshTicks > 0) {
+                watched.add(StockWatch.Item(realItemIndex, refreshTicks, stockOf(player, definition, realItemIndex, cfg)))
+                watchedConfigs[realItemIndex] = cfg
+            }
             dynamicSlots.add(GuiSlot(
                 x = pos.first, y = pos.second,
                 item = stack,
                 allowPickup = false,
                 interactions = interactions,
-                itemProvider = if (refreshTicks > 0) liveItem(cfg, definition, refreshTicks, stack) else null,
+                // Rebuilt on every redraw, which only happens when a watched stock has changed.
+                itemProvider = if (refreshTicks > 0) { viewer -> buildShopItem(cfg, viewer, definition) } else null,
             ))
         }
 
@@ -327,48 +332,52 @@ class ShopGuiService(
             it.extendToPlayerInventory = extendedChassis
         }
 
-        openSessions[player.uniqueId] = ShopSession(definition, page)
+        val shopSession = ShopSession(definition, page)
+        openSessions[player.uniqueId] = shopSession
         MenuSessionService.register(
             player,
             menuDef,
             pushHistory = if (tabMode) pushHistory else page == 0,
-            // The engine redraws the open menu on the player's own scheduler, and stops with it.
-            autoRefreshTicks = RefreshRate.menuPeriodTicks(liveTicks) ?: 0L,
         )
+        watchStocks(player, definition, shopSession, menuDef.id, StockWatch(watched, System.currentTimeMillis()), watchedConfigs)
     }
 
     /**
-     * Ticks between two redraws of [cfg]'s display, 0 when it is never redrawn.
+     * Ticks between two looks at [cfg]'s stock, 0 when it is never looked at.
      *
      * Only an article with a finite stock can change while the shop is open; an unlimited one
-     * would be redrawn for nothing.
+     * is not watched at all.
      */
     private fun liveRefreshTicks(cfg: ShopItemConfig, definition: ShopDefinitionEntry): Int =
         if (cfg.dynamicPricing.stockMax <= 0) 0
         else RefreshRate.effectiveTicks(cfg.refreshTicks, definition.defaultRefreshTicks)
 
     /**
-     * Rebuilds [cfg]'s display on each menu redraw, at most once per [refreshTicks].
-     *
-     * The menu redraws at its fastest article's pace; an article with a slower period keeps its
-     * last display in between. [first] is the display already built for the first draw.
+     * Looks at the watched stocks on the player's own scheduler and redraws the open menu only
+     * when one of them has changed: a shop whose stocks do not move costs a few cached reads per
+     * period and no redraw. The task ends with the shop session, the menu or the player.
      */
-    private fun liveItem(
-        cfg: ShopItemConfig,
+    private fun watchStocks(
+        player: Player,
         definition: ShopDefinitionEntry,
-        refreshTicks: Int,
-        first: ItemStack,
-    ): (Player) -> ItemStack {
-        var shown = first
-        var drawnAt = System.currentTimeMillis()
-        return { viewer ->
-            val now = System.currentTimeMillis()
-            if (RefreshRate.isDue(refreshTicks, drawnAt, now)) {
-                shown = buildShopItem(cfg, viewer, definition)
-                drawnAt = now
+        session: ShopSession,
+        menuId: String,
+        watch: StockWatch,
+        configs: Map<Int, ShopItemConfig>,
+    ) {
+        val period = watch.fastestPeriodTicks ?: return
+        player.scheduler.runAtFixedRate(plugin, { task ->
+            val stillOpen = openSessions[player.uniqueId] === session &&
+                MenuSessionService.getSession(player)?.definition?.id == menuId
+            if (!stillOpen) {
+                task.cancel()
+                return@runAtFixedRate
             }
-            shown.clone()
-        }
+            val changed = watch.poll(System.currentTimeMillis()) { index ->
+                configs[index]?.let { stockOf(player, definition, index, it) } ?: 0
+            }
+            if (changed) MenuSessionService.refresh(player)
+        }, null, period, period)
     }
 
     // ──────────────────────────────────────────────

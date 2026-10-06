@@ -108,7 +108,7 @@ class ShopDefinitionEntry(
     @Help("Global sell limit across all items (all players combined). 0 = unlimited.")
     val globalSellLimit: Int = 0,
 
-    @Help("How often, in ticks, the stock shown by an open shop is redrawn (20 = 1 second). Applies to items with a finite stock; an item's own refreshTicks replaces it. 0 = never redraw by itself. Very low values cost server time.")
+    @Help("How often, in ticks, an open shop checks whether the stock it shows has changed (20 = 1 second); the shop is redrawn only when it has. Applies to items with a finite stock; an item's own refreshTicks replaces it. 0 = never check by itself.")
     val defaultRefreshTicks: Int = 20,
 
     @Help("If true, every player has their own stock of each item: a purchase only lowers the buyer's stock, and a reset refills everyone's. Limits keep their own scope (playerLimit per player, globalLimit and the global buy/sell limits shared).")

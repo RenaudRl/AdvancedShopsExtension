@@ -30,8 +30,18 @@ class StockService(
         if (strategy.stockMax <= 0) return Int.MAX_VALUE
         val current = getStock(shopId, itemId, strategy.stockMax, playerUuid)
         val updated = buy(current, amount)
-        persistence.setStock(shopId, itemId, updated, playerUuid)
+        store(shopId, itemId, updated, strategy.stockMax, playerUuid)
         return updated
+    }
+
+    /**
+     * Keeps only the gap to the initial stock: a stock back at its maximum is not stored at all
+     * (an absent key reads as the maximum), so the artifact holds one entry per item that is
+     * actually below full, never one per player and item that ever traded.
+     */
+    private fun store(shopId: String, itemId: Int, stock: Int, max: Int, playerUuid: UUID?) {
+        if (stock == max) persistence.clearStock(shopId, itemId, playerUuid)
+        else persistence.setStock(shopId, itemId, stock, playerUuid)
     }
 
     /** Adds [amount] to [current] stock but not beyond [max]. */
@@ -47,7 +57,7 @@ class StockService(
         if (strategy.stockMax <= 0) return Int.MAX_VALUE
         val current = getStock(shopId, itemId, strategy.stockMax, playerUuid)
         val updated = sell(current, amount, strategy.stockMax)
-        persistence.setStock(shopId, itemId, updated, playerUuid)
+        store(shopId, itemId, updated, strategy.stockMax, playerUuid)
         return updated
     }
 
