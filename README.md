@@ -2,7 +2,8 @@
 
 ![Java Version](https://img.shields.io/badge/Java-21-orange)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-![Target](https://img.shields.io/badge/Target-Paper%20/%20Folia%20/%20BTC--CORE-blue)
+![Target](https://img.shields.io/badge/Target-Paper-blue)
+![Typewriter](https://img.shields.io/badge/Typewriter-0.9.0--beta--177-purple)
 
 **Shops Extension** is a commerce system for **TypeWriter**, engineered for **BTC Studio** infrastructure. It provides a full-featured shop experience with dynamic pricing and stock handling.
 
@@ -19,6 +20,8 @@
 
 ### 📦 Stock & Limits
 - **Stock Management**: Real-time tracking of shop stock levels.
+- **Per-Player Stock** (`perPlayer`): every player has their own stock of each item; a purchase only
+  lowers the buyer's stock and a reset refills everyone's. Limits keep their own scope.
 - **Per-Player & Global Limits**: Buy/sell limits per player and globally.
 - **Taxes & Promotions**: Global and per-item taxes, price trends, and promotions.
 
@@ -60,8 +63,24 @@
 
 ### 🖥️ GUI Integration
 - **Full GUIExtension Integration**: Customizable layouts via the GUI/OmniGUI extension.
-- **Buy/Sell Toggles**: Configurable per item, with adjustable refresh rates.
+- **Buy/Sell Toggles**: Configurable per item. `sellAllEnabled` off refuses the sell-all action with
+  the shop's `cannotSellMessage`.
+- **Live stock refresh**: `defaultRefreshTicks` (shop, default 20; 0 = no automatic check) and the
+  item's `refreshTicks` redraw an open shop when the stock shown changes (finite stocks only).
+- **Fixed slots**: an item's `guiSlot` pins it at a fixed slot of the content area on every page; an
+  item that cannot be placed is moved to a free cell or reported in the console.
 - **Transaction History**: Persistent storage via artifact.
+
+### 📚 Entries
+
+| Entry | Id |
+|---|---|
+| Shop Definition | `shop_definition` |
+| Shop Category | `shop_category` |
+| Item Pool | `item_pool` |
+| Shop Promotion | `shop_promotion` |
+| Shop Artifact (runtime storage) | `shop_artifact` |
+| Open Shop (action) | `open_shop` |
 
 ### Admin Operations
 - List and inspect loaded shop definitions.
@@ -75,6 +94,10 @@
 ## ⚙️ Configuration
 
 Shops Extension configuration is managed via TypeWriter's manifest system.
+
+**Requirements**: Typewriter `0.9.0-beta-177` on Paper, and the GUI extension (`renaud:GuiAndDialogs`,
+[OmniGUI](https://github.com/RenaudRl/Typewriter-OmniGUIExtension)). Vault (economy) and
+PlaceholderAPI are used when present.
 
 ## 🛠 Building & Deployment
 
