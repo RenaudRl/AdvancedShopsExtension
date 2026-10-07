@@ -435,7 +435,7 @@ class ShopGuiService(
             )
 
             // Build title
-            val titleTemplate = definition.subMenuTitle.replace("{item_name}", cfg.name.ifEmpty { "Item" })
+            val titleTemplate = definition.subMenuTitle.replace("{item_name}", cfg.name.ifEmpty { definition.defaultItemName })
             val rawTitle = applyPlaceholders(player, titleTemplate)
             val menuDef = MenuDefinition(
                 id = "shop:submenu:${definition.id}:${itemIndex}:${player.uniqueId}",
@@ -582,7 +582,7 @@ class ShopGuiService(
             // price disappears too: the fault is logged at purchase time, where it is refused.
             val resolution = itemPriceService.applicablePrice(definition, cfg) ?: return null
             val lines = (resolution as? ItemPriceRule.Resolution.Price<ItemCost>)?.lines ?: return null
-            out = out.replace("{item_price}", itemPriceService.describe(player, lines))
+            out = out.replace("{item_price}", itemPriceService.describe(player, lines, definition))
         }
         if (out.contains("{buy}")) {
             if (!cfg.buyEnabled) return null

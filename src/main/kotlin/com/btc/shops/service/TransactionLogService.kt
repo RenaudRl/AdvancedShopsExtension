@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Singleton
 class TransactionLogService {
     companion object {
+        // Technical guard: bounds the memory the in-process history can take per player.
         private const val MAX_ENTRIES_PER_PLAYER = 50
     }
 

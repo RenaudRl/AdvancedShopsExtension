@@ -181,6 +181,27 @@ class ShopDefinitionEntry(
     @Help("What the trend_icon placeholder shows when the price of an item did not move, or when no earlier price is known. Supports color codes.")
     val trendStableIcon: String = "<gray>●</gray>",
 
+    @Colored
+    @Help("One line of the {item_price} lore token (a price paid in items); there is one line per requested item. {amount} is the quantity asked, {name} the item name. Supports color codes.")
+    val itemPriceLineFormat: String = "- {amount} × {name}",
+    @Colored
+    @Help("Name shown for a price item whose own name cannot be read, in the {item_price} lore and in the list of missing items. Supports color codes.")
+    val unknownItemName: String = "unknown item",
+    @Colored
+    @Help("One entry of the {missing} list of cannotAffordItemsMessage. {amount} is the quantity that is lacking, {name} the item name. Supports color codes.")
+    val missingItemFormat: String = "{amount} × {name}",
+    @Colored
+    @Help("What goes between two entries of the {missing} list of cannotAffordItemsMessage. Supports color codes.")
+    val missingItemSeparator: String = ", ",
+    @Colored
+    @Help("Name given to the item in the {item_name} token of subMenuTitle when the item has no name of its own. Supports color codes.")
+    val defaultItemName: String = "Item",
+    @Colored
+    @Help("Shown instead of a number where a price paid in items has none: the buy_price and sell_price placeholders, and {price} in the inventory full message of such an item. Supports color codes.")
+    val noPriceText: String = "—",
+    @Help("Pattern of the cooldown placeholder (time until the next reset) when the placeholder gives no format of its own. {d} days, {h} hours, {m} minutes, {s} seconds; hours, minutes and seconds are padded to 2 digits.")
+    val cooldownFormat: String = "{d}d:{h}h:{m}m:{s}s",
+
     @Help("Id of the webhook destination announcing this shop's transactions. Empty = no announcement. Shops does not resolve it: it travels on ShopTransactionEvent for whichever extension handles Discord.")
     val notificationWebhookId: String = "",
 

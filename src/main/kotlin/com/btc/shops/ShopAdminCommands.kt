@@ -124,6 +124,7 @@ internal fun CommandTree.buildShopAdminTree() {
         executePlayerOrTarget { target ->
             val history = KoinJavaComponent.get<TransactionLogService>(TransactionLogService::class.java)
                 .getHistory(target.uniqueId)
+                // Technical guard: keeps one reply short enough for the chat, whatever the history holds.
                 .take(10)
             sender.sendMini(ShopTexts.historyHeader(target.name, history.size))
             if (history.isEmpty()) {

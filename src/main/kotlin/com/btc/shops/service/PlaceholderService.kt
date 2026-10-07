@@ -43,7 +43,7 @@ class PlaceholderService(
         val (identifier, format) = key.split('_', limit = 2).let { it[0] to it.getOrNull(1) }
         return when (identifier) {
             "name" -> shop.name
-            "cooldown" -> formatDuration(resetService.remaining(shop), format)
+            "cooldown" -> formatDuration(resetService.remaining(shop), format ?: shop.cooldownFormat)
             "entryid" -> shop.id
             else -> null
         }
@@ -65,14 +65,15 @@ class PlaceholderService(
             "buy_price" -> when (config.priceMode) {
                 PriceMode.FIXED -> config.fixedBuyPrice.toString()
                 PriceMode.DYNAMIC -> priceService.calculateBuyPrice(stock, config.dynamicPricing).toString()
-                // A price paid in items has no number. A dash rather than "0", which would read
-                // as free; the real price is shown by the `{item_price}` lore token.
-                PriceMode.ITEMS -> "—"
+                // A price paid in items has no number. The shop's noPriceText (a dash by default)
+                // rather than "0", which would read as free; the real price is shown by the
+                // `{item_price}` lore token.
+                PriceMode.ITEMS -> shop.noPriceText
             }
             "sell_price" -> when (config.priceMode) {
                 PriceMode.FIXED -> config.fixedSellPrice.toString()
                 PriceMode.DYNAMIC -> priceService.calculateSellPrice(stock, config.dynamicPricing).toString()
-                PriceMode.ITEMS -> "—"
+                PriceMode.ITEMS -> shop.noPriceText
             }
             "stock" -> stock.toString()
             "stock_max" -> config.dynamicPricing.stockMax.toString()
@@ -86,19 +87,17 @@ class PlaceholderService(
 
 }
 
-internal fun formatDuration(millis: Long, pattern: String? = null): String {
+/** [millis] worded by [pattern]: `{d}` days, `{h}`, `{m}` and `{s}` padded to 2 digits. */
+internal fun formatDuration(millis: Long, pattern: String): String {
     val totalSeconds = millis / 1000
     val days = totalSeconds / 86_400
     val hours = (totalSeconds % 86_400) / 3_600
     val minutes = (totalSeconds % 3_600) / 60
     val seconds = totalSeconds % 60
 
-    val defaultPattern = "{d}j:{h}h:{m}m:{s}s"
-    val fmt = pattern ?: defaultPattern
-
     fun Long.pad() = toString().padStart(2, '0')
 
-    return fmt
+    return pattern
         .replace("{d}", days.toString())
         .replace("{h}", hours.pad())
         .replace("{m}", minutes.pad())

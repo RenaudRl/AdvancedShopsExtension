@@ -64,6 +64,7 @@ class ItemPriceService {
         player: Player,
         resolution: ItemPriceRule.Resolution<ItemCost>,
         quantity: Int,
+        unknownItemName: String,
     ): Verdict {
         val lines = when (resolution) {
             is ItemPriceRule.Resolution.Absent ->
@@ -105,7 +106,7 @@ class ItemPriceService {
             }
 
             if (toTake > 0) {
-                val name = readableName(player, line)
+                val name = readableName(player, line, unknownItemName)
                 missing[name] = (missing[name] ?: 0) + toTake
             }
         }
@@ -128,13 +129,14 @@ class ItemPriceService {
         ceiling: Int,
     ): Int {
         if (ceiling <= 0) return 0
-        if (evaluate(player, resolution, 1) !is Verdict.Payable) return 0
+        // Only "payable or not" is read here, never the names of what is missing, so the name given to an unreadable item is empty.
+        if (evaluate(player, resolution, 1, unknownItemName = "") !is Verdict.Payable) return 0
 
         var low = 1
         var high = ceiling
         while (low < high) {
             val middle = low + (high - low + 1) / 2
-            if (evaluate(player, resolution, middle) is Verdict.Payable) low = middle else high = middle - 1
+            if (evaluate(player, resolution, middle, unknownItemName = "") is Verdict.Payable) low = middle else high = middle - 1
         }
         return low
     }
@@ -168,16 +170,19 @@ class ItemPriceService {
      * at all, and the player would not know what is asked before being refused. Lines rather than
      * a comma list: a five-item price on one lore line stretches the tooltip across the screen.
      */
-    fun describe(player: Player, lines: List<ItemCost>): String =
-        lines.joinToString("\n") { "- ${it.amount} × ${readableName(player, it)}" }
+    fun describe(player: Player, lines: List<ItemCost>, definition: ShopDefinitionEntry): String =
+        ItemPriceText.describe(
+            lines.map { it.amount to readableName(player, it, definition.unknownItemName) },
+            definition.itemPriceLineFormat,
+        )
 
     /** The name the player reads in the refusal. Without a readable name, a refusal helps no one. */
-    private fun readableName(player: Player, line: ItemCost): String = runCatching {
+    private fun readableName(player: Player, line: ItemCost, unknownItemName: String): String = runCatching {
         val stack = line.item.get(player).build(player)
         val name = stack.itemMeta?.displayName()
         if (name != null) plainText.serialize(name) else stack.type.name.lowercase().replace('_', ' ')
     }.getOrElse {
         logger.warning("Could not name a price line paid in items: ${it.message}")
-        "unknown item"
+        unknownItemName
     }
 }

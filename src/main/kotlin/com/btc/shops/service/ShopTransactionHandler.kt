@@ -80,9 +80,9 @@ class ShopTransactionHandler(
         playSound(player, definition.deniedSound)
     }
 
-    /** "3 × Kelp, 12 × Copper Ingot" — what a refusal names when items are missing. */
-    private fun describeMissing(missing: Map<String, Int>): String =
-        missing.entries.joinToString(", ") { "${it.value} × ${it.key}" }
+    /** "3 × Kelp, 12 × Copper Ingot" by default — what a refusal names when items are missing; the shop sets the wording. */
+    private fun describeMissing(definition: ShopDefinitionEntry, missing: Map<String, Int>): String =
+        ItemPriceText.missing(missing, definition.missingItemFormat, definition.missingItemSeparator)
 
     fun handleBuy(
         player: Player,
@@ -148,7 +148,7 @@ class ShopTransactionHandler(
         val taxedCost: Double
 
         if (itemPrice != null) {
-            when (val verdict = itemPriceService.evaluate(player, itemPrice, amount)) {
+            when (val verdict = itemPriceService.evaluate(player, itemPrice, amount, definition.unknownItemName)) {
                 is ItemPriceService.Verdict.Invalid -> {
                     // Neither a sale nor a refusal addressed to the player: a configuration
                     // mistake. Log it, and above all do NOT deliver — an empty price is not a
@@ -165,7 +165,7 @@ class ShopTransactionHandler(
                         player,
                         definition,
                         definition.cannotAffordItemsMessage
-                            .replace("{missing}", describeMissing(verdict.missing))
+                            .replace("{missing}", describeMissing(definition, verdict.missing))
                             .replace("{amount}", amount.toString()),
                     )
                 }
@@ -179,7 +179,7 @@ class ShopTransactionHandler(
                             player,
                             definition,
                             definition.inventoryFullMessage.replace("{amount}", amount.toString())
-                                .replace("{price}", "—"),
+                                .replace("{price}", definition.noPriceText),
                         )
                     }
                     // Nothing between the evaluation and the withdrawal yields: the plan names
@@ -419,11 +419,11 @@ class ShopTransactionHandler(
                     // On a barter, "you cannot afford this" says nothing: the list of missing
                     // items is what informs. The refusal borrows the items message.
                     if (itemPrice != null) {
-                        val missing = (itemPriceService.evaluate(player, itemPrice, 1)
+                        val missing = (itemPriceService.evaluate(player, itemPrice, 1, definition.unknownItemName)
                             as? ItemPriceService.Verdict.Missing)
                             ?.missing
-                            ?.let(::describeMissing)
-                            ?: "—"
+                            ?.let { describeMissing(definition, it) }
+                            ?: definition.noPriceText
                         definition.cannotAffordItemsMessage.replace("{missing}", missing)
                     } else {
                         definition.cannotAffordMessage
