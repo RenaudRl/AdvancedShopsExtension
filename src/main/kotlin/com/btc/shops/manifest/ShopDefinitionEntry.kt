@@ -5,6 +5,7 @@ import btcrenaud.gui.api.MenuViewData
 import com.typewritermc.core.books.pages.Colors
 import com.typewritermc.core.entries.Ref
 import com.typewritermc.core.entries.emptyRef
+import com.typewritermc.core.extension.annotations.Colored
 import com.typewritermc.core.extension.annotations.Entry
 import com.typewritermc.core.extension.annotations.Help
 import com.typewritermc.core.extension.annotations.Tags
@@ -169,6 +170,16 @@ class ShopDefinitionEntry(
     val defaultNameFormat: String = "",
     @Help("Lore applied to items that declare none. Same tokens as defaultNameFormat; a line asking for an unavailable price is dropped. Empty = no default lore.")
     val defaultLoreFormat: List<String> = emptyList(),
+
+    @Colored
+    @Help("What the trend_icon item placeholder of this shop shows when the price of an item went up since the last record. Supports color codes.")
+    val trendUpIcon: String = "<red>▲</red>",
+    @Colored
+    @Help("What the trend_icon placeholder shows when the price of an item went down since the last record. Supports color codes.")
+    val trendDownIcon: String = "<green>▼</green>",
+    @Colored
+    @Help("What the trend_icon placeholder shows when the price of an item did not move, or when no earlier price is known. Supports color codes.")
+    val trendStableIcon: String = "<gray>●</gray>",
 
     @Help("Id of the webhook destination announcing this shop's transactions. Empty = no announcement. Shops does not resolve it: it travels on ShopTransactionEvent for whichever extension handles Discord.")
     val notificationWebhookId: String = "",

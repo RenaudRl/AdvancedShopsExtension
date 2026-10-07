@@ -1,5 +1,6 @@
 package com.btc.shops.service
 
+import com.btc.shops.ShopTextTemplate
 import com.btc.shops.manifest.PoolItem
 import com.btc.shops.manifest.PriceMode
 import com.btc.shops.manifest.ShopDefinitionEntry
@@ -7,6 +8,21 @@ import com.btc.shops.manifest.ShopItemConfig
 import com.btc.shops.manifest.ShopPoolEntry
 import com.typewritermc.core.extension.annotations.Singleton
 import kotlin.random.Random
+
+/**
+ * The lore of a pool item: its own [lore], then one closing line telling whether its supply is limited.
+ * The wording of that line is the pool's ([limitedLore] with `{limit}` filled, or [unlimitedLore]).
+ */
+internal fun poolLore(
+    lore: List<String>,
+    isLimited: Boolean,
+    limit: Int,
+    limitedLore: String,
+    unlimitedLore: String,
+): List<String> {
+    val closingLine = if (isLimited) ShopTextTemplate.fill(limitedLore, mapOf("limit" to "$limit")) else unlimitedLore
+    return lore + closingLine
+}
 
 /**
  * Resolves item pools referenced by shop definitions into concrete shop items.
@@ -45,7 +61,7 @@ class ShopPoolService {
             ShopItemConfig(
                 item = poolItem.item,
                 name = poolItem.name,
-                lore = buildPoolLore(poolItem),
+                lore = poolLore(poolItem.lore, poolItem.isLimited, poolItem.limit, pool.limitedLore, pool.unlimitedLore),
                 buyEnabled = true,
                 sellEnabled = poolItem.isLimited,
                 priceMode = PriceMode.FIXED,
@@ -55,16 +71,6 @@ class ShopPoolService {
                 globalLimit = if (poolItem.isLimited) poolItem.limit else 0
             )
         }
-    }
-
-    private fun buildPoolLore(item: PoolItem): List<String> {
-        val lore = item.lore.toMutableList()
-        if (item.isLimited) {
-            lore.add("<yellow>Limited: <red>${item.limit}")
-        } else {
-            lore.add("<yellow>Unlimited")
-        }
-        return lore
     }
 
     private fun selectWeighted(items: List<PoolItem>, count: Int): List<PoolItem> {

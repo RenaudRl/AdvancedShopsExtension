@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture
 class ShopArgumentType : CustomArgumentType.Converted<String, String> {
     override fun convert(nativeType: String): String {
         Query.findById<ShopDefinitionEntry>(nativeType)
-            ?: throw SimpleCommandExceptionType(LiteralMessage("Unknown shop: $nativeType")).create()
+            ?: throw SimpleCommandExceptionType(LiteralMessage(ShopTexts.unknownShopError(nativeType))).create()
         return nativeType
     }
 
@@ -48,10 +48,7 @@ fun CommandTree.shopCommands() = literal("shop") {
     literal("admin") { buildShopAdminTree() }
 
     executes {
-        sender.sendMini(
-            "<gold>Shop commands:</gold> <yellow>/tw shop <id></yellow> to open a shop, " +
-                "<yellow>/tw shop admin</yellow> for operator tools."
-        )
+        sender.sendMini(ShopTexts.help())
     }
 
     argument("shop", ShopArgumentType(), String::class) { shopArg ->

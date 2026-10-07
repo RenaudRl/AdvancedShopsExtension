@@ -78,7 +78,7 @@ class PlaceholderService(
             "stock_max" -> config.dynamicPricing.stockMax.toString()
             "has_promotion" -> promotionService.hasPromotion(shop.id, index).toString()
             "trend" -> priceTrendService.getTrend(shop.id, index)
-            "trend_icon" -> priceTrendService.getTrendIcon(shop.id, index)
+            "trend_icon" -> priceTrendService.getTrendIcon(shop, index)
             "price_delta" -> priceTrendService.getPriceDelta(shop.id, index).toString()
             else -> null
         }

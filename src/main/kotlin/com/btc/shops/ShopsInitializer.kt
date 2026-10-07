@@ -21,6 +21,7 @@ object ShopsInitializer : Initializable {
         KoinJavaComponent.get<ShopButtonActionHandler>(ShopButtonActionHandler::class.java).register()
 
         registerPermissions()
+        ShopTexts.register()
 
         logger.info("[Shops] Extension initialized")
     }

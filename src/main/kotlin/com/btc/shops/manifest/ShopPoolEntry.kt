@@ -1,6 +1,7 @@
 package com.btc.shops.manifest
 
 import com.typewritermc.core.books.pages.Colors
+import com.typewritermc.core.extension.annotations.Colored
 import com.typewritermc.core.extension.annotations.Entry
 import com.typewritermc.core.extension.annotations.Help
 import com.typewritermc.core.extension.annotations.Tags
@@ -22,7 +23,13 @@ class ShopPoolEntry(
     @Help("Items in this pool with their weights and limits.")
     val items: List<PoolItem> = emptyList(),
     @Help("Number of items from this pool to display in the shop. 0 means all.")
-    val displayCount: Int = 0
+    val displayCount: Int = 0,
+    @Colored
+    @Help("Lore line added to a limited item of this pool. {limit} is the quantity available. Supports color codes.")
+    val limitedLore: String = "<yellow>Limited: <red>{limit}",
+    @Colored
+    @Help("Lore line added to an item of this pool that has no limit. Supports color codes.")
+    val unlimitedLore: String = "<yellow>Unlimited",
 ) : ManifestEntry
 
 /**

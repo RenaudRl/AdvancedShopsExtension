@@ -1,7 +1,18 @@
 package com.btc.shops.service
 
 import com.btc.shops.manifest.ShopArtifact
+import com.btc.shops.manifest.ShopDefinitionEntry
 import com.typewritermc.core.extension.annotations.Singleton
+
+/**
+ * The icon for a trend as [PriceTrendService.getTrend] words it: "up" and "down" have their own, anything else
+ * ("stable", or "unknown" while no earlier price is recorded) takes the stable one.
+ */
+internal fun trendIcon(trend: String, up: String, down: String, stable: String): String = when (trend) {
+    "up" -> up
+    "down" -> down
+    else -> stable
+}
 
 /**
  * Tracks price trends for shop items.
@@ -23,13 +34,9 @@ class PriceTrendService(
         }
     }
 
-    fun getTrendIcon(shopId: String, itemIndex: Int): String {
-        return when (getTrend(shopId, itemIndex)) {
-            "up" -> "<red>▲</red>"
-            "down" -> "<green>▼</green>"
-            else -> "<gray>●</gray>"
-        }
-    }
+    /** The icon the shop's own fields give to the current trend of the item. */
+    fun getTrendIcon(definition: ShopDefinitionEntry, itemIndex: Int): String =
+        trendIcon(getTrend(definition.id, itemIndex), definition.trendUpIcon, definition.trendDownIcon, definition.trendStableIcon)
 
     fun getPriceDelta(shopId: String, itemIndex: Int): Double {
         val previousPrice = getPreviousPrice(shopId, itemIndex)
