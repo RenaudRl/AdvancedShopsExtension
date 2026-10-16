@@ -3,7 +3,7 @@ plugins {
     id("com.typewritermc.module-plugin") version "2.2.0"
 }
 
-val omniGuiVersion = "0.17"
+val omniGuiVersion = "0.20"
 
 repositories {
     mavenCentral()
@@ -38,7 +38,7 @@ dependencies {
 }
 
 group = "btc.renaud"
-version = "1.11"
+version = "1.12"
 
 typewriter {
     namespace = "btcrenaud"
