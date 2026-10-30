@@ -225,7 +225,8 @@ class ShopGuiService(
             } else {
                 EmptyLayout
             }
-            rawTitle = applyPlaceholders(player, definition.title)
+            // The template, not its resolved text: OmniGUI resolves the placeholders for the viewer.
+            rawTitle = definition.title
         }
 
         // 3. Build dynamic shop item slots with configurable click actions. SHOP_ITEM markers are
@@ -323,7 +324,7 @@ class ShopGuiService(
         val menuDef = MenuDefinition(
             id = "shop:${definition.id}:${player.uniqueId}",
             type = GuiType.CUSTOM,
-            title = rawTitle.toComponent(),
+            title = GuiText.parse(rawTitle, player),
             rawTitle = rawTitle,
             size = size,
             layout = resolvedLayout,
@@ -435,12 +436,11 @@ class ShopGuiService(
             )
 
             // Build title
-            val titleTemplate = definition.subMenuTitle.replace("{item_name}", cfg.name.ifEmpty { definition.defaultItemName })
-            val rawTitle = applyPlaceholders(player, titleTemplate)
+            val rawTitle = definition.subMenuTitle.replace("{item_name}", cfg.name.ifEmpty { definition.defaultItemName })
             val menuDef = MenuDefinition(
                 id = "shop:submenu:${definition.id}:${itemIndex}:${player.uniqueId}",
                 type = GuiType.CUSTOM,
-                title = rawTitle.toComponent(),
+                title = GuiText.parse(rawTitle, player),
                 rawTitle = rawTitle,
                 size = size,
                 layout = resolvedLayout,

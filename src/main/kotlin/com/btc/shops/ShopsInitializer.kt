@@ -1,6 +1,7 @@
 package com.btc.shops
 
 import com.btc.shops.service.ShopButtonActionHandler
+import com.btc.shops.ui.ShopButtonTypes
 import com.typewritermc.core.extension.Initializable
 import com.typewritermc.core.extension.annotations.Singleton
 import org.bukkit.Bukkit
@@ -14,6 +15,13 @@ object ShopsInitializer : Initializable {
     private val logger = LoggerFactory.getLogger(ShopsInitializer::class.java)
 
     override suspend fun initialize() {
+        // GuiText only exists from OmniGUI 0.21; the dependency DSL cannot state a version. Do not stop the init.
+        try {
+            Class.forName("btcrenaud.gui.api.GuiText")
+        } catch (_: ClassNotFoundException) {
+            logger.error("[Shops] requires OmniGUI 0.21 or newer: menus will not open until OmniGUI is updated.")
+        }
+
         // Shop buttons are routed in-process by the GUI extension (see ShopButtonActionHandler).
         // They used to be registered as a real `/typewritershop` Bukkit command and bounced through
         // the console sender, which exposed an internal command to players and tab completion.
@@ -22,6 +30,7 @@ object ShopsInitializer : Initializable {
 
         registerPermissions()
         ShopTexts.register()
+        ShopButtonTypes.register()
 
         logger.info("[Shops] Extension initialized")
     }
@@ -43,6 +52,7 @@ object ShopsInitializer : Initializable {
     }
 
     override suspend fun shutdown() {
+        ShopButtonTypes.unregister()
         KoinJavaComponent.get<ShopButtonActionHandler>(ShopButtonActionHandler::class.java).unregister()
         logger.info("[Shops] Extension shutting down")
     }

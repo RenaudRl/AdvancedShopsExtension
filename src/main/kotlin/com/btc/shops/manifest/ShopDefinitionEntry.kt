@@ -26,7 +26,7 @@ import java.util.UUID
  *
  * Sub-menus (buy/sell options) are another layout in the same [layoutPool], picked by [subMenuLayoutId].
  */
-@Tags("shop")
+@Tags("shop", "gui_menu")
 @Entry("shop_definition", "Defines a shop", Colors.GREEN, "mdi:cart")
 class ShopDefinitionEntry(
     override val id: String = "",

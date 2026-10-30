@@ -3,7 +3,11 @@ plugins {
     id("com.typewritermc.module-plugin") version "2.2.0"
 }
 
-val omniGuiVersion = "0.20"
+val omniGuiVersion = "0.21"
+
+// 0.21 is not on the GitHub releases yet: -PomniGuiJar=<path> compiles against a local build of it instead.
+val omniGui: Any = providers.gradleProperty("omniGuiJar").orNull?.let { files(it) }
+    ?: "btcrenaud:Typewriter-OmniGUIExtension:v$omniGuiVersion@jar"
 
 repositories {
     mavenCentral()
@@ -31,14 +35,16 @@ dependencies {
     // compileOnly("io.papermc.paper:paper-api:1.21.4-...") here was stale and redundant with that.
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") { isTransitive = false }
     compileOnly("me.clip:placeholderapi:2.11.6")
-    compileOnly("btcrenaud:Typewriter-OmniGUIExtension:v$omniGuiVersion@jar")
+    compileOnly(omniGui)
     testImplementation(kotlin("test"))
+    // The button type registry test loads the real OmniGUI classes, which compileOnly keeps off the test classpath.
+    testImplementation(omniGui)
     // The artifact service builds its Gson when the class loads; the server provides it, tests do not.
     testRuntimeOnly("com.google.code.gson:gson:2.11.0")
 }
 
 group = "btc.renaud"
-version = "1.12"
+version = "1.13"
 
 typewriter {
     namespace = "btcrenaud"

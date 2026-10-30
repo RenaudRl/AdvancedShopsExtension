@@ -29,6 +29,9 @@ class ShopButtonResolverLayout(
 ) : MenuLayout {
 
     companion object {
+        /** Tag prefix of every shop button in a saved menu, e.g. `shop_button:BUY_STACK`. Never changes once released. */
+        const val PREFIX = "shop_button:"
+
         /**
          * Prefix every shop button command carries. [MenuSessionService] routes these straight to
          * [com.btc.shops.service.ShopButtonActionHandler] instead of dispatching them on the console.
@@ -38,7 +41,7 @@ class ShopButtonResolverLayout(
 
     private val delegate = GenericButtonResolverLayout(
         inner = inner,
-        prefix = "shop_button:",
+        prefix = PREFIX,
         resolver = { type, p, slot -> resolveButton(type, p, slot) },
         id = id,
     )
